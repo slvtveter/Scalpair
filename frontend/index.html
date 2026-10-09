@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scalpair — AI Scalping Screener</title>
+  <meta name="description" content="Real-time order book density, AI scalp scores and setup detection. Read-only. No keys. No execution." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css?v=0.2.3" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2313161a'/><path d='M22 68 L42 34 L56 56 L78 28' stroke='%232f9e63' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
+</head>
+<body>
+  <!-- ================= TOP BAR ================= -->
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-name">Scalpair</span>
+      <span class="badge" id="feed-badge">Connecting</span>
+    </div>
+
+    <div class="status-cluster mono">
+      <span class="stat"><label>Ingest</label><span id="latency-val">—</span></span>
+      <span class="stat"><label>Symbols</label><span id="symbols-val">0</span></span>
+      <span class="stat"><label>Msg/s</label><span id="msgrate-val">0</span></span>
+      <span class="stat"><label>UTC</label><span id="clock">--:--:--</span></span>
+    </div>
+
+    <div class="controls">
+      <select id="min-score" class="ctl" title="Minimum AI score filter" aria-label="Minimum AI score filter">
+        <option value="0" selected>Score ≥ 0</option>
+        <option value="40">Score ≥ 40</option>
+        <option value="60">Score ≥ 60</option>
+        <option value="80">Score ≥ 80</option>
+        <option value="90">Score ≥ 90</option>
+      </select>
+      <select id="wall-filter" class="ctl" title="Wall notional filter" aria-label="Wall notional filter">
+        <option value="0" selected>Walls: all</option>
+        <option value="250000">Walls ≥ $250K</option>
+        <option value="1000000">Walls ≥ $1M</option>
+        <option value="5000000">Walls ≥ $5M</option>
+      </select>
+      <button id="sound-toggle" class="ctl ctl-btn" title="Alert sound for setups with score ≥ 85" aria-label="Toggle alert sound">Sound off</button>
+    </div>
+  </header>
+
+  <!-- ================= TICKER STRIP ================= -->
+  <div class="ticker-strip" id="ticker-strip">
+    <div class="ticker-track" id="ticker-track"></div>
+  </div>
+
+  <!-- ================= MAIN GRID ================= -->
+  <main class="layout">
+    <!-- Terminal table -->
+    <section class="panel table-panel">
+      <div class="panel-head">
+        <h2>Scanner</h2>
+        <span class="panel-hint mono">L2 walls · flow · AI score</span>
+      </div>
+      <div class="table-wrap">
+        <table class="term-table" id="main-table">
+          <thead>
+            <tr>
+              <th class="col-sym">Ticker</th>
+              <th class="num">Price</th>
+              <th class="col-trend">Trend <span class="hint-inline">10m</span></th>
+              <th class="num">5m %</th>
+              <th class="num">1m Vol</th>
+              <th class="num">Surge</th>
+              <th class="col-imb">Book Imb</th>
+              <th class="num">Wall</th>
+              <th class="num">Dist</th>
+              <th class="num">Fund</th>
+              <th class="num col-score">AI Score</th>
+              <th class="col-tag">Setup</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+        <div id="table-empty" class="empty-note">waiting for market data…</div>
+      </div>
+    </section>
+
+    <!-- Right rail -->
+    <aside class="rail">
+      <section class="panel hotlist">
+        <div class="panel-head">
+          <h2>AI Hotlist</h2>
+          <span class="badge subtle" id="hotlist-mode">Top 5</span>
+        </div>
+        <div id="hotlist-body" class="hotlist-body">
+          <div class="empty-note">scoring engine warming up…</div>
+        </div>
+      </section>
+
+      <section class="panel radar-panel">
+        <div class="panel-head">
+          <h2>Density Radar</h2>
+          <span class="panel-hint mono">distance % vs notional</span>
+        </div>
+        <canvas id="radar-canvas" width="520" height="300"></canvas>
+        <div class="radar-legend mono">
+          <span class="lg lg-bid">Bid walls</span>
+          <span class="lg lg-ask">Ask walls</span>
+        </div>
+      </section>
+
+      <section class="panel alerts-panel">
+        <div class="panel-head"><h2>Alerts</h2><span class="badge subtle" id="alert-count">0</span></div>
+        <div id="alerts-body" class="alerts-body mono"><div class="empty-note">no alerts fired yet</div></div>
+      </section>
+    </aside>
+  </main>
+
+  <!-- ================= CHART MODAL ================= -->
+  <div id="chart-modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <h3 id="chart-title" class="mono">—</h3>
+        <div class="modal-head-right">
+          <div class="tf-picker" id="tf-picker" role="group" aria-label="Timeframe">
+            <button class="tf-btn active" data-tf="1">1m</button>
+            <button class="tf-btn" data-tf="5">5m</button>
+            <button class="tf-btn" data-tf="15">15m</button>
+            <button class="tf-btn" data-tf="60">1h</button>
+          </div>
+          <span id="chart-tag" class="tag-text"></span>
+          <button id="chart-close" class="ctl ctl-btn">Close</button>
+        </div>
+      </div>
+      <canvas id="chart-canvas" width="900" height="380"></canvas>
+      <p id="chart-thesis" class="modal-thesis mono"></p>
+    </div>
+  </div>
+
+  <footer class="footer mono">
+    <span>Scalpair · read-only analytics · no private keys · no order execution · public exchange data</span>
+    <span id="foot-stats">—</span>
+  </footer>
+
+  <script src="/js/app.js?v=0.2.3"></script>
+</body>
+</html>

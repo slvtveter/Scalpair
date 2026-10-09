@@ -1,0 +1,60 @@
+name: scalpair
+
+services:
+  backend:
+    build: ./backend
+    container_name: scalpair-backend
+    restart: unless-stopped
+    environment:
+      DATA_FEED: ${DATA_FEED:-auto}
+      TOP_SYMBOLS: ${TOP_SYMBOLS:-30}
+      REDIS_URL: redis://redis:6379/0
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///./data/scalpair.db}
+      JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-string}
+      ML_SCORE_INTERVAL: ${ML_SCORE_INTERVAL:-15}
+      ML_HEURISTIC_WEIGHT: ${ML_HEURISTIC_WEIGHT:-0.65}
+      WALL_MULTIPLIER: ${WALL_MULTIPLIER:-3.0}
+      WS_BROADCAST_RATE: ${WS_BROADCAST_RATE:-6}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - backend-data:/srv/data
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - scalpair-net
+
+  frontend:
+    build: ./frontend
+    container_name: scalpair-frontend
+    restart: unless-stopped
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_started
+    networks:
+      - scalpair-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: scalpair-redis
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - scalpair-net
+
+volumes:
+  backend-data:
+
+networks:
+  scalpair-net:
+    driver: bridge
