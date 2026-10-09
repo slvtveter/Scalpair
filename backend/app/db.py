@@ -12,7 +12,7 @@ import os
 import time
 from typing import AsyncIterator
 
-from sqlalchemy import JSON, Float, ForeignKey, Integer, String, event, text
+from sqlalchemy import JSON, Boolean, Float, ForeignKey, Integer, String, event, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -50,6 +50,62 @@ class AlertLog(Base):
     score: Mapped[float] = mapped_column(Float)
     tag: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class AlertRule(Base):
+    """Server-side alert rule (spec section 7) — evaluated with the browser closed."""
+
+    __tablename__ = "alert_rules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    rule_type: Mapped[str] = mapped_column(String(32))  # price_cross_above|price_cross_below|pct_move|volume_surge|score_above
+    threshold: Mapped[float] = mapped_column(Float)
+    window_s: Mapped[int] = mapped_column(Integer, default=60)     # for pct_move
+    cooldown_s: Mapped[int] = mapped_column(Integer, default=300)  # re-arm delay
+    recurring: Mapped[bool] = mapped_column(Boolean, default=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_value: Mapped[float | None] = mapped_column(Float, nullable=True)  # edge-detection anchor
+    last_triggered_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+
+
+class AlertEvent(Base):
+    __tablename__ = "alert_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    rule_id: Mapped[int] = mapped_column(ForeignKey("alert_rules.id"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    event_id: Mapped[str] = mapped_column(String(64), unique=True)  # idempotency
+    ts: Mapped[float] = mapped_column(Float, index=True)
+    symbol: Mapped[str] = mapped_column(String(32))
+    rule_type: Mapped[str] = mapped_column(String(32))
+    message: Mapped[str] = mapped_column(String(512))
+
+
+class NotificationDelivery(Base):
+    __tablename__ = "notification_deliveries"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    event_db_id: Mapped[int] = mapped_column(ForeignKey("alert_events.id"), index=True)
+    channel: Mapped[str] = mapped_column(String(16))  # in_app | telegram
+    status: Mapped[str] = mapped_column(String(16), default="pending")  # pending|sent|failed|unconfigured
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    last_error: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[float] = mapped_column(Float, default=time.time)
+    sent_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+
+class TelegramLink(Base):
+    __tablename__ = "telegram_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+    chat_id: Mapped[str] = mapped_column(String(64), default="")
+    link_token: Mapped[str | None] = mapped_column(String(64), nullable=True)  # one-time deep-link token
+    token_expires: Mapped[float | None] = mapped_column(Float, nullable=True)
+    linked_at: Mapped[float | None] = mapped_column(Float, nullable=True)
 
 
 # ---------------------------------------------------------------------------

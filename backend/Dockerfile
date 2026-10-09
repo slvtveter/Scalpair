@@ -18,9 +18,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PATH="/opt/venv/bin:$PATH"
 
-# curl for the container healthcheck
+# curl + gosu for the healthcheck and privilege drop
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl gosu \
     && rm -rf /var/lib/apt/lists/*
 
 # non-root runtime user
@@ -32,8 +32,12 @@ WORKDIR /srv
 COPY --from=builder /opt/venv /opt/venv
 COPY app ./app
 COPY pytest.ini ./
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-USER app
+# entrypoint chowns the data volume (pre-existing volumes may be root-owned)
+# and drops privileges to `app`
+ENTRYPOINT ["/entrypoint.sh"]
 
 EXPOSE 8000
 

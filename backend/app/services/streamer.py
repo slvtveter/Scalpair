@@ -141,9 +141,58 @@ class MarketStreamer:
             asyncio.create_task(self._scoring_loop(), name="scoring-loop"),
             asyncio.create_task(self._universe_loop(), name="universe-loop"),
             asyncio.create_task(self._degradation_watch(), name="degradation-watch"),
-            asyncio.create_task(self._candle_backfill(), name="candle-backfill"),
+            asyncio.create_task(self._candle_backfill_task(), name="candle-backfill"),
             asyncio.create_task(self._levels_loop(), name="levels-loop"),
+            asyncio.create_task(self._live_recovery_loop(), name="live-recovery"),
         ]
+
+    async def _candle_backfill_task(self) -> None:
+        await self._seed_candles()
+        # re-seed when the universe grows (new symbols have no history)
+        while not self._stop.is_set():
+            await asyncio.sleep(60.0)
+            missing = [s for s in self.top_symbols if s not in self._seeded_symbols]
+            if missing:
+                await self._seed_candles()
+
+    # ------------------------------------------------------------------
+    # Live recovery (spec: upstream recovery). If boot fell back to the
+    # mock feed because exchanges were unreachable (e.g. Docker network
+    # still settling), re-probe every 2 minutes and hot-swap to live.
+    # ------------------------------------------------------------------
+    RECOVERY_PROBE_S = 120.0
+
+    async def _live_recovery_loop(self) -> None:
+        # Only recover from an *accidental* mock fallback (auto mode).
+        # Explicit DATA_FEED=mock (tests / offline demo) must stay deterministic.
+        if not isinstance(self.feed, MockFeed) or self.settings.data_feed != "auto":
+            return
+        log.warning("started in mock mode — probing for live feed recovery every %ds", self.RECOVERY_PROBE_S)
+        while not self._stop.is_set():
+            await asyncio.sleep(self.RECOVERY_PROBE_S)
+            if self._stop.is_set() or not isinstance(self.feed, MockFeed):
+                return
+            for make in (BinanceFuturesFeed, BybitLinearFeed):
+                candidate = make(self._make_callbacks())
+                try:
+                    probe = await asyncio.wait_for(candidate.fetch_universe(3), timeout=12)
+                except Exception as exc:  # noqa: BLE001
+                    log.info("recovery probe %s failed: %s", candidate.name, exc)
+                    continue
+                if not probe:
+                    continue
+                log.warning("live feed recovered via %s — switching from mock", candidate.name)
+                self.feed.stop()
+                self.feed = candidate
+                self.state.feed_mode = candidate.name
+                tickers = await candidate.fetch_universe(self.settings.top_symbols)
+                self._seed_universe(tickers)
+                candidate.set_universe(self.top_symbols)
+                self._tasks.append(asyncio.create_task(candidate.run(), name=f"{candidate.name}-run"))
+                self._seeded_symbols.clear()
+                self._tasks.append(asyncio.create_task(self._candle_backfill_task(), name="candle-backfill-recovered"))
+                self._tasks.append(asyncio.create_task(self._live_recovery_loop(), name="live-recovery-recovered"))
+                return
         log.info("streamer started: feed=%s symbols=%d", self.feed.name, len(self.top_symbols))
 
     # ------------------------------------------------------------------

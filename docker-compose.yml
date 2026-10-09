@@ -17,6 +17,8 @@ services:
       WS_BROADCAST_RATE: ${WS_BROADCAST_RATE:-6}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
     volumes:
       - backend-data:/srv/data
     ports:

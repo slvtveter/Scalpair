@@ -19,8 +19,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
+from app.alerts import AlertEngine
 from app.api import auth as auth_router
 from app.api import routes as api_routes
+from app.api import alerts_api
 from app.config import get_settings
 from app.db import init_db, dispose_db
 from app.ml_engine import ScalpScorer
@@ -56,12 +58,16 @@ async def lifespan(app: FastAPI):
 
     streamer = MarketStreamer(state, settings, scorer, broadcaster.publish)
 
+    alert_engine = AlertEngine(state, settings, scorer)
+    alert_task = asyncio.create_task(alert_engine.run(), name="alert-engine")
+
     dispatch_task = asyncio.create_task(broadcaster.run(), name="broadcaster-dispatch")
 
     app.state.market_state = state
     app.state.scorer = scorer
     app.state.broadcaster = broadcaster
     app.state.streamer = streamer
+    app.state.alert_engine = alert_engine
 
     streamer_task = asyncio.create_task(streamer.start(), name="streamer-start")
 
@@ -73,9 +79,12 @@ async def lifespan(app: FastAPI):
         with contextlib.suppress(asyncio.CancelledError):
             await streamer_task
         await streamer.stop()
+        alert_engine.stop()
         dispatch_task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await dispatch_task
+        with contextlib.suppress(asyncio.CancelledError):
+            await alert_task
         await dispose_db()
         log.info("Scalpair backend shut down cleanly")
 
@@ -106,6 +115,7 @@ async def security_headers(request, call_next):  # noqa: ANN001
 
 app.include_router(api_routes.router)
 app.include_router(auth_router.router)
+app.include_router(alerts_api.router)
 
 
 @app.get("/api/v1/meta")
