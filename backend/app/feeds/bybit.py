@@ -11,6 +11,8 @@ Docs: https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook
 
 from __future__ import annotations
 
+import contextlib
+import json
 import logging
 from typing import Any
 
@@ -36,6 +38,7 @@ class BybitLinearFeed(FeedConnector):
         self._books: dict[str, dict[str, dict[float, float]]] = {}
         # last known ticker values for delta-frame merging
         self._ticker_cache: dict[str, tuple[float, float, float]] = {}
+        self._book_seq: dict[str, int] = {}  # last atomic sequence per symbol
 
     # ------------------------------------------------------------------
     async def fetch_universe(self, n: int) -> list[dict[str, Any]]:
@@ -138,6 +141,25 @@ class BybitLinearFeed(FeedConnector):
                     book["asks"][pf] = qf
         except (ValueError, TypeError):
             return
+        # sequence validation (spec: gap => resync). Bybit atomic `seq` must be +1.
+        seq = data.get("seq")
+        if seq is not None:
+            try:
+                seq = int(seq)
+                if mtype == "delta" and sym in self._book_seq and seq != self._book_seq[sym] + 1:
+                    log.warning(
+                        "orderbook seq gap for %s (%d -> %d) — clearing local book, requesting snapshot",
+                        sym, self._book_seq[sym], seq,
+                    )
+                    book["bids"] = {}
+                    book["asks"] = {}
+                    if self._ws is not None:
+                        with contextlib.suppress(Exception):
+                            await self._ws.send(json.dumps({"op": "subscribe", "args": [f"orderbook.50.{sym}"]}))
+            except (TypeError, ValueError):
+                pass
+            self._book_seq[sym] = seq if isinstance(seq, int) else self._book_seq.get(sym, 0)
+
         bids = sorted(book["bids"].items(), key=lambda x: x[0], reverse=True)[:25]
         asks = sorted(book["asks"].items(), key=lambda x: x[0])[:25]
         await self.callbacks.on_book(sym, bids, asks, float(ts or 0))

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/styles.css?v=0.2.3" />
+  <link rel="stylesheet" href="/css/styles.css?v=0.3.0" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2313161a'/><path d='M22 68 L42 34 L56 56 L78 28' stroke='%232f9e63' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
 </head>
 <body>
@@ -27,6 +27,18 @@
     </div>
 
     <div class="controls">
+      <input id="search" class="ctl search-input" type="search" placeholder="Поиск…" aria-label="Symbol search" />
+      <label class="watch-only-label"><input type="checkbox" id="watch-only" /> ★</label>
+      <button id="view-toggle" class="ctl ctl-btn" title="Table / chart board">Board</button>
+      <select id="grid-size" class="ctl" title="Board grid size" aria-label="Board grid size">
+        <option value="1">1×1</option>
+        <option value="2">2×2</option>
+        <option value="3" selected>3×3</option>
+        <option value="4">4×4</option>
+      </select>
+      <button id="page-prev" class="ctl ctl-btn" aria-label="Previous page">‹</button>
+      <span id="page-ind" class="mono page-ind">1/1</span>
+      <button id="page-next" class="ctl ctl-btn" aria-label="Next page">›</button>
       <select id="min-score" class="ctl" title="Minimum AI score filter" aria-label="Minimum AI score filter">
         <option value="0" selected>Score ≥ 0</option>
         <option value="40">Score ≥ 40</option>
@@ -41,6 +53,8 @@
         <option value="5000000">Walls ≥ $5M</option>
       </select>
       <button id="sound-toggle" class="ctl ctl-btn" title="Alert sound for setups with score ≥ 85" aria-label="Toggle alert sound">Sound off</button>
+      <button id="lang-toggle" class="ctl ctl-btn" aria-label="Language">RU</button>
+      <button id="bell" class="ctl ctl-btn" aria-label="Notifications">🔔<span id="bell-count" class="bell-count hidden">0</span></button>
     </div>
   </header>
 
@@ -51,10 +65,16 @@
 
   <!-- ================= MAIN GRID ================= -->
   <main class="layout">
+    <!-- Chart board -->
+    <section class="panel board-panel hidden" id="board-panel">
+      <div class="board-grid" id="board-grid"></div>
+      <div class="empty-note" id="board-empty">waiting for market data…</div>
+    </section>
+
     <!-- Terminal table -->
-    <section class="panel table-panel">
+    <section class="panel table-panel" id="table-panel">
       <div class="panel-head">
-        <h2>Scanner</h2>
+        <h2 id="h2-scanner">Сканер</h2>
         <span class="panel-hint mono">L2 walls · flow · AI score</span>
       </div>
       <div class="table-wrap">
@@ -65,12 +85,15 @@
               <th class="num">Price</th>
               <th class="col-trend">Trend <span class="hint-inline">10m</span></th>
               <th class="num">5m %</th>
+              <th class="num">NATR</th>
+              <th class="num">Скор.</th>
               <th class="num">1m Vol</th>
               <th class="num">Surge</th>
               <th class="col-imb">Book Imb</th>
               <th class="num">Wall</th>
               <th class="num">Dist</th>
               <th class="num">Fund</th>
+              <th class="num">Уровень</th>
               <th class="num col-score">AI Score</th>
               <th class="col-tag">Setup</th>
             </tr>
@@ -85,7 +108,7 @@
     <aside class="rail">
       <section class="panel hotlist">
         <div class="panel-head">
-          <h2>AI Hotlist</h2>
+          <h2 id="h2-hotlist">AI Подборка</h2>
           <span class="badge subtle" id="hotlist-mode">Top 5</span>
         </div>
         <div id="hotlist-body" class="hotlist-body">
@@ -95,7 +118,7 @@
 
       <section class="panel radar-panel">
         <div class="panel-head">
-          <h2>Density Radar</h2>
+          <h2 id="h2-radar">Радар плотностей</h2>
           <span class="panel-hint mono">distance % vs notional</span>
         </div>
         <canvas id="radar-canvas" width="520" height="300"></canvas>
@@ -106,7 +129,7 @@
       </section>
 
       <section class="panel alerts-panel">
-        <div class="panel-head"><h2>Alerts</h2><span class="badge subtle" id="alert-count">0</span></div>
+        <div class="panel-head"><h2 id="h2-alerts">Алерты</h2><span class="badge subtle" id="alert-count">0</span></div>
         <div id="alerts-body" class="alerts-body mono"><div class="empty-note">no alerts fired yet</div></div>
       </section>
     </aside>
@@ -129,15 +152,32 @@
         </div>
       </div>
       <canvas id="chart-canvas" width="900" height="380"></canvas>
+      <div class="chart-alert-row">
+        <span>🔔</span>
+        <span id="alert-symbol" class="mono">—</span>
+        <select id="alert-type" aria-label="Alert rule type">
+          <option value="price_cross_above">цена выше</option>
+          <option value="price_cross_below">цена ниже</option>
+          <option value="pct_move">движение %</option>
+          <option value="volume_surge">всплеск объёма x</option>
+          <option value="score_above">скоринг ≥</option>
+        </select>
+        <input id="alert-threshold" type="number" step="any" min="0" placeholder="порог" />
+        <button id="alert-create" class="ctl ctl-btn">Создать алерт</button>
+      </div>
       <p id="chart-thesis" class="modal-thesis mono"></p>
     </div>
   </div>
+
+  <!-- notifications dropdown + toasts -->
+  <div id="notif-panel" class="notif-panel hidden mono"></div>
+  <div id="toasts" class="toasts"></div>
 
   <footer class="footer mono">
     <span>Scalpair · read-only analytics · no private keys · no order execution · public exchange data</span>
     <span id="foot-stats">—</span>
   </footer>
 
-  <script src="/js/app.js?v=0.2.3"></script>
+  <script src="/js/app.js?v=0.3.0"></script>
 </body>
 </html>

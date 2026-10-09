@@ -80,6 +80,7 @@ class FeedConnector:
         self.backoff_max = backoff_max
         self.ping_interval = ping_interval
         self.stats = FeedStats()
+        self._ws = None  # live socket ref (used for resync requests)
         self.top_symbols: list[str] = []
         self._stop = asyncio.Event()
         self._universe_dirty = asyncio.Event()
@@ -122,6 +123,7 @@ class FeedConnector:
                     max_queue=4096,
                     compression=None,
                 ) as ws:
+                    self._ws = ws
                     self.stats.connects += 1
                     self.stats.last_connect_at = time.time()
                     attempt = 0
