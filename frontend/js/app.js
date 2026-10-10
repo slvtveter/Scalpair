@@ -260,6 +260,7 @@ function onSnapshot(snap) {
   S.lastSnapshotAt = Date.now();
   S.feed = snap.feed || S.feed;
   S.symbols = snap.symbols || [];
+  syncVenueChips(S.symbols);
   S.picks = snap.picks || [];
   S.stats = snap.stats || {};
   S.bySym.clear();
@@ -277,6 +278,21 @@ function onSnapshot(snap) {
     S.bySym.set(r.symbol, r);
   }
   checkAlerts();
+}
+
+function syncVenueChips(rows) {
+  const host = $("venue-chips");
+  if (!host || !host.dataset) return;
+  const order = ["BI-F", "BI-S", "BY-F", "BY-S", "OK-F", "OK-S"];
+  const available = new Set(rows.map((row) => row.venue || row.exchange).filter(Boolean));
+  const venues = order.filter((venue) => available.has(venue));
+  if (S.venue !== "ALL" && !venues.includes(S.venue)) S.venue = "ALL";
+  const signature = [S.venue, ...venues].join("|");
+  if (host.dataset.signature === signature) return;
+  host.dataset.signature = signature;
+  host.innerHTML = ["ALL", ...venues].map((venue) =>
+    `<button class="venue-chip ${S.venue === venue ? "active" : ""}" data-venue="${venue}">${venue}</button>`
+  ).join("");
 }
 
 function checkAlerts() {
@@ -1125,10 +1141,14 @@ document.addEventListener("click", e => {
 });
 
 $("sort-by").addEventListener("change", (e) => { S.sortKey = e.target.value; LS.set("sort", S.sortKey); renderBoard(); renderCoinList(); });
-document.querySelectorAll(".venue-chip").forEach((btn) => btn.addEventListener("click", () => {
-  document.querySelectorAll(".venue-chip").forEach((x) => x.classList.toggle("active", x === btn));
-  S.venue = btn.textContent.trim(); S.page = 0; _boardSig = ""; renderBoard(); renderCoinList();
-}));
+$("venue-chips")?.addEventListener("click", (event) => {
+  const btn = event.target.closest(".venue-chip");
+  if (!btn) return;
+  S.venue = btn.dataset.venue || "ALL";
+  S.page = 0; _boardSig = "";
+  syncVenueChips(S.symbols);
+  renderBoard(); renderCoinList();
+});
 document.querySelector(".auto-chip")?.addEventListener("click", (e) => {
   setAutoSort(!S.autoSort);
   renderBoard(); renderCoinList();
