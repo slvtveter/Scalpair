@@ -44,6 +44,10 @@ async def health(request: Request) -> HealthReport:
     last_age = state.message_age_ms()
     feeds = [streamer.feed.name] if streamer and streamer.feed else []
     feeds += [f.name for f in (streamer.extra_feeds if streamer else [])]
+    feed_stats = {}
+    if streamer and streamer.feed:
+        stats = streamer.feed.stats
+        feed_stats = {"connects": stats.connects, "reconnects": stats.reconnects, "messages": stats.messages, "errors": stats.errors}
     uptime = time.time() - START_TIME
     # A connector can pass the universe probe and still fail to ingest WS
     # events. After a short warmup that state is degraded, never healthy.
@@ -59,6 +63,7 @@ async def health(request: Request) -> HealthReport:
         last_message_age_ms=round(last_age) if last_age is not None else None,
         redis_connected=broadcaster.redis_connected,
         feed_mode=state.feed_mode,
+        feed_stats=feed_stats,
     )
 
 
