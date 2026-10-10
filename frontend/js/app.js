@@ -7,7 +7,15 @@
 
 const $ = (id) => document.getElementById(id);
 
-const WS_PATH = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/v1/ws/live-feed`;
+// Same-origin by default (docker/nginx); on Render the static site talks to
+// the backend service cross-origin (CORS configured on the backend).
+const API_BASE = window.SCALPAIR_API_BASE ||
+  (location.hostname.endsWith("onrender.com") && !location.hostname.startsWith("scalpair-backend")
+    ? "https://scalpair-backend.onrender.com"
+    : "");
+const WS_PATH = API_BASE
+  ? `${API_BASE.replace(/^http/, "ws")}/api/v1/ws/live-feed`
+  : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/v1/ws/live-feed`;
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
 const STALE_BOOK_MS = 15000;
@@ -403,7 +411,7 @@ function setIfChanged(el, html) {
 async function api(path, opts = {}) {
   const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
   if (S.jwt) headers.Authorization = `Bearer ${S.jwt}`;
-  return fetch(path, { ...opts, headers });
+  return fetch(`${API_BASE}${path}`, { ...opts, headers });
 }
 
 async function pollNotifications() {
@@ -467,7 +475,7 @@ function renderNotifPanel(items) {
 
 async function authFlow(path) {
   try {
-    const res = await fetch(path, {
+    const res = await fetch(`${API_BASE}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: $("nl-email").value, password: $("nl-pass").value }),
@@ -549,7 +557,7 @@ async function getCandles(sym) {
   const cached = S.candleCache.get(sym);
   if (cached && Date.now() - cached.ts < 60000) return cached.candles;
   try {
-    const res = await fetch(`/api/v1/markets/${encodeURIComponent(sym)}/candles?limit=300`, { cache: "no-store" });
+    const res = await fetch(`${API_BASE}/api/v1/markets/${encodeURIComponent(sym)}/candles?limit=300`, { cache: "no-store" });
     if (!res.ok) return cached?.candles || [];
     const body = await res.json();
     S.candleCache.set(sym, { ts: Date.now(), candles: body.candles || [] });
@@ -735,7 +743,7 @@ async function openChart(symbol) {
 async function refreshChart(resetView = false) {
   if (!chartSym || modal.classList.contains("hidden")) return;
   try {
-    const res = await fetch(`/api/v1/markets/${encodeURIComponent(chartSym)}/candles?limit=300`, { cache: "no-store" });
+    const res = await fetch(`${API_BASE}/api/v1/markets/${encodeURIComponent(chartSym)}/candles?limit=300`, { cache: "no-store" });
     if (!res.ok) return;
     const body = await res.json();
     chart.candles = body.candles || [];
