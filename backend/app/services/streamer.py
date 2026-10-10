@@ -64,6 +64,7 @@ class MarketStreamer:
         self._generation = 0
         self._seeded_symbols: set[str] = set()
         self._backfill_lock = asyncio.Lock()
+        self._failover_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Callbacks (feed → state)
@@ -347,10 +348,53 @@ class MarketStreamer:
     # The connector's own reconnect loop handles transport recovery.
     # ------------------------------------------------------------------
     DEGRADE_WARMUP_S = 25.0
+    FAILOVER_AFTER_SILENT_ROUNDS = 2
+
+    async def _attempt_failover(self, generation: int) -> None:
+        """Move to another live connector when a probed source has no WS data.
+
+        REST universe discovery alone is not enough to call a source healthy: a
+        venue can answer REST while its websocket is blocked or unavailable.
+        In auto mode, probe the remaining connectors and activate the first one
+        that has both a universe and a fresh generation boundary.
+        """
+        if self.settings.data_feed != "auto" or generation != self._generation:
+            return
+        async with self._failover_lock:
+            if generation != self._generation or self._stop.is_set():
+                return
+            current = self.feed.name if self.feed else ""
+            candidates = [
+                BinanceFuturesFeed(self._make_callbacks()),
+                BybitLinearFeed(self._make_callbacks()),
+                OkxSwapFeed(self._make_callbacks()),
+            ]
+            for candidate in candidates:
+                if candidate.name == current:
+                    continue
+                try:
+                    probe = await asyncio.wait_for(candidate.fetch_universe(3), timeout=FEED_PROBE_TIMEOUT_S)
+                    if not probe:
+                        continue
+                    tickers = await asyncio.wait_for(
+                        candidate.fetch_universe(self.settings.top_symbols), timeout=FEED_PROBE_TIMEOUT_S,
+                    )
+                    if not tickers:
+                        continue
+                    self._activate_feed(candidate, tickers)
+                    self._tasks.append(asyncio.create_task(candidate.run(), name=f"{candidate.name}-run"))
+                    self._tasks.append(asyncio.create_task(self._seed_candles(), name="failover-backfill"))
+                    self._tasks.append(asyncio.create_task(self._degradation_watch(), name="degradation-watch-failover"))
+                    log.warning("failed over from silent source %s to %s", current, candidate.name)
+                    return
+                except Exception as exc:  # noqa: BLE001 — try the next venue
+                    log.info("failover probe %s failed: %s", candidate.name, exc)
+            log.warning("no alternate live source available after silent %s feed", current)
 
     async def _degradation_watch(self) -> None:
         generation = self._generation
         previous_books, previous_trades = self.book_events, self.trade_events
+        silent_rounds = 0
         while not self._stop.is_set() and generation == self._generation:
             await asyncio.sleep(self.DEGRADE_WARMUP_S)
             if generation != self._generation or self._stop.is_set():
@@ -362,7 +406,13 @@ class MarketStreamer:
             self.feed_degraded = (books == 0 and trades == 0) or (books > 50 and trades == 0)
             previous_books, previous_trades = self.book_events, self.trade_events
             if self.feed_degraded:
+                silent_rounds += 1
                 log.warning("source %s is silent or has books without trades; keeping sources isolated", self.feed.name)
+                if silent_rounds >= self.FAILOVER_AFTER_SILENT_ROUNDS:
+                    await self._attempt_failover(generation)
+                    return
+            else:
+                silent_rounds = 0
             self.publish(self.build_snapshot())
 
     async def _metrics_loop(self) -> None:
