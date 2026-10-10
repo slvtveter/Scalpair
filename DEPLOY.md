@@ -1,5 +1,12 @@
 # Деплой Scalpair на Render
 
+## Развёрнуто (live)
+
+- Терминал: **https://scalpair-frontend.onrender.com**
+- API: **https://scalpair-backend.onrender.com/api/v1/health**
+- Фронтенд — static site, API_BASE определяется автоматически (кросс-домен, CORS настроен).
+- Free-тир: бэкенд засыпает после 15 мин без трафика; первое открытие — cold start ~1–2 мин.
+
 ## Вариант 1 — Blueprint (рекомендуется, ~5 минут)
 
 1. Залейте репозиторий на GitHub (уже сделано: `slvtveter/Scalpair`).
@@ -14,9 +21,23 @@
 ## Вариант 2 — CLI
 
 ```bash
-npm install -g @render-oss/cli   # или brew install render
+npm install -g @render-oss/cli   # или brew tap render-oss/render && brew install render
 render login                     # откроет браузер для авторизации
 render blueprint launch          # применит render.yaml из репозитория
+```
+
+## Через API (как задеплоено в этой сессии)
+
+```bash
+export RENDER_KEY=rnd_...
+# backend (docker): POST /v1/services {type: web_service, repo, serviceDetails:{runtime:docker,
+#   healthCheckPath:/api/v1/health, plan:free, region:frankfurt}, dockerfilePath:./backend/Dockerfile,
+#   dockerContext:./backend}
+# NB: dockerfilePath/dockerContext — только top-level поля; внутри serviceDetails они
+# молча игнорируются (грабля, на которую ушла итерация).
+# frontend (static): POST /v1/services {type: static_site, rootDir: frontend,
+#   serviceDetails:{buildCommand, publishPath:./}, headers:[...]}
+# деплой: POST /v1/services/{id}/deploys
 ```
 
 ## Ограничения free-тира (важно для реального использования)

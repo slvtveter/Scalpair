@@ -38,13 +38,6 @@ services:
     name: scalpair-frontend
     runtime: static
     staticPublishPath: .
-    routes:
-      - type: rewrite
-        source: /api/*
-        destination: https://scalpair-backend.onrender.com/api/:splat
-      - type: rewrite
-        source: /api/v1/ws/*
-        destination: https://scalpair-backend.onrender.com/api/v1/ws/:splat
     headers:
       - path: /*
         name: X-Content-Type-Options
