@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.auth import User, current_user
 from app.config import get_settings
-from app.db import AlertEvent, AlertRule, NotificationDelivery, TelegramLink, get_session_factory
+from app.db import AlertEvent, AlertRule, NotificationDelivery, TelegramLink, WatchlistItem, get_session_factory
 
 router = APIRouter(prefix="/api/v1", tags=["alerts"])
 
@@ -25,6 +25,43 @@ def _require_user(user: User | None) -> User:
     if user is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "sign in to manage alerts")
     return user
+
+
+class WatchlistIn(BaseModel):
+    symbols: list[str] = Field(default_factory=list, max_length=500)
+
+
+@router.get("/watchlists")
+async def get_watchlist(user: AUTHORIZED) -> dict[str, Any]:
+    _require_user(user)
+    factory = get_session_factory(get_settings().database_url)
+    async with factory() as sess:
+        rows = (
+            await sess.execute(select(WatchlistItem).where(WatchlistItem.user_id == user.id).order_by(WatchlistItem.id))
+        ).scalars().all()
+    return {"symbols": [row.symbol for row in rows]}
+
+
+@router.put("/watchlists")
+async def put_watchlist(body: WatchlistIn, user: AUTHORIZED) -> dict[str, Any]:
+    _require_user(user)
+    symbols: list[str] = []
+    for raw in body.symbols:
+        symbol = raw.strip().upper()
+        if not symbol or len(symbol) > 32 or not symbol.endswith("USDT"):
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "watchlist symbols must be USDT instruments")
+        if symbol not in symbols:
+            symbols.append(symbol)
+    factory = get_session_factory(get_settings().database_url)
+    async with factory() as sess:
+        rows = (
+            await sess.execute(select(WatchlistItem).where(WatchlistItem.user_id == user.id))
+        ).scalars().all()
+        for row in rows:
+            await sess.delete(row)
+        sess.add_all([WatchlistItem(user_id=user.id, symbol=symbol) for symbol in symbols])
+        await sess.commit()
+    return {"symbols": symbols}
 
 
 class RuleIn(BaseModel):

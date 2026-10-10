@@ -144,7 +144,9 @@ function deleteGroup(id) {
 function toggleGroupSymbol(id,symbol) {
   if (id==="watch") {
     if (S.watch.has(symbol)) S.watch.delete(symbol); else S.watch.add(symbol);
-    LS.set("watch",[...S.watch]);return;
+    LS.set("watch",[...S.watch]);
+    persistWatchlist();
+    return;
   }
   const group=S.groups.find(g=>g.id===id);
   if (!group) return;
@@ -1020,6 +1022,7 @@ async function authFlow(path) {
       S.jwt = body.access_token;
       LS.set("jwt", S.jwt);
       toast("✓ " + t("signIn"));
+      await syncWatchlist();
       if (ws) ws.close(); // reconnect carries the token → full feed
       pollNotifications();
     } else {
@@ -1027,6 +1030,28 @@ async function authFlow(path) {
       await authFlow("/api/v1/auth/login");
     }
   } catch { toast(t("loginError"), "err"); }
+}
+
+async function syncWatchlist() {
+  if (!S.jwt) return;
+  try {
+    const response = await api("/api/v1/watchlists");
+    if (!response.ok) return;
+    const body = await response.json();
+    S.watch = new Set(Array.isArray(body.symbols) ? body.symbols : []);
+    LS.set("watch", [...S.watch]);
+    renderGroups(); renderBoard(); renderCoinList();
+  } catch {}
+}
+
+async function persistWatchlist() {
+  if (!S.jwt) return;
+  try {
+    await api("/api/v1/watchlists", {
+      method: "PUT",
+      body: JSON.stringify({ symbols: [...S.watch] }),
+    });
+  } catch {}
 }
 
 $("bell").addEventListener("click", () => {
