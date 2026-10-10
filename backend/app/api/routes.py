@@ -137,16 +137,18 @@ async def recent_alerts(request: Request) -> JSONResponse:
 @router.get("/markets/symbols")
 async def symbols(request: Request) -> JSONResponse:
     streamer = request.app.state.streamer
+    feed_name = streamer.feed.name if streamer.feed else ""
+    venue = venue_for_feed(feed_name)
     return JSONResponse(
         {
             "feed": request.app.state.market_state.feed_mode,
             "symbols": [
                 {
                     "symbol": s,
-                    "instrument_id": f"{venue_for_feed(streamer.feed.name if streamer.feed else "")}:FUTURES:{s}",
+                    "instrument_id": f"{venue}:FUTURES:{s}",
                     "price": request.app.state.market_state.symbols[s].price,
                     "quote_volume_24h": request.app.state.market_state.symbols[s].quote_volume_24h,
-                    "venue": venue_for_feed(streamer.feed.name if streamer.feed else ""),
+                    "venue": venue,
                     "market": "FUTURES",
                 }
                 for s in streamer.top_symbols if s in request.app.state.market_state.symbols
@@ -181,13 +183,14 @@ async def candles(
             raise HTTPException(409, "Market source changed; retry history request")
         source = "exchange_rest"
         limited = False
+    venue = venue_for_feed(feed.name if feed else "")
     return JSONResponse(
         {
             "symbol": st.symbol,
-            "instrument_id": f"{venue_for_feed(feed.name if feed else "")}:FUTURES:{st.symbol}",
+            "instrument_id": f"{venue}:FUTURES:{st.symbol}",
             "timeframe": timeframe,
             "feed": state.feed_mode,
-            "venue": venue_for_feed(feed.name if feed else ""),
+            "venue": venue,
             "sourceGeneration": generation,
             "historySource": source,
             "limitedHistory": limited,
