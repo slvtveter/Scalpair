@@ -176,3 +176,38 @@ async def _evaluate_with(engine: AlertEngine, rule: AlertRule, sess) -> None:
     if not rule.recurring:
         rule.enabled = False
     engine._fired_last = True
+
+
+def test_cascade_distance_and_density_conditions(state):
+    engine=mk_engine(state)
+    sym=state.get("BTCUSDT")
+    from types import SimpleNamespace
+    sym.cascades=[SimpleNamespace(mid=64_640.0)]
+    sym.walls={"bid:64000": {"notional_usd": 2_000_000}}
+    near=mk_rule(rule_type="cascade_distance", threshold=1.0, last_value=0.0)
+    assert engine._check(near, 64_000.0) == (True, pytest.approx(1.0))
+    wall=mk_rule(rule_type="density_appeared", threshold=1_500_000, last_value=0.0)
+    fired, observed=engine._check(wall, 64_000.0)
+    assert fired and observed == pytest.approx(2_000_000)
+
+
+def test_density_and_cascade_alerts_are_edge_triggered(state):
+    engine=mk_engine(state); sym=state.get("BTCUSDT")
+    from types import SimpleNamespace
+    sym.cascades=[SimpleNamespace(mid=64_640.0)]
+    sym.walls={"bid": {"notional_usd": 2_000_000}}
+    r=mk_rule(rule_type="density_appeared", threshold=1_500_000, last_value=None)
+    fired, _=engine._check(r, 64_000); assert not fired
+    r.last_value=0.0; fired, _=engine._check(r, 64_000); assert fired
+    r.last_value=1.0; fired, _=engine._check(r, 64_000); assert not fired
+    r=mk_rule(rule_type="cascade_distance", threshold=1.0, last_value=0.0)
+    fired, _=engine._check(r, 64_000); assert fired
+    r.last_value=1.0; fired, _=engine._check(r, 64_000); assert not fired
+
+
+def test_instrument_binding_rejects_wrong_source(state):
+    state.feed_mode="mock"
+    engine=mk_engine(state)
+    assert engine._rule_matches_instrument(mk_rule(instrument_id="DEMO:FUTURES:BTCUSDT"))
+    assert not engine._rule_matches_instrument(mk_rule(instrument_id="BINANCE:FUTURES:BTCUSDT"))
+    assert engine._rule_matches_instrument(mk_rule(instrument_id=None))

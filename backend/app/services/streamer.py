@@ -17,6 +17,8 @@ import time
 from typing import Any
 
 from app import analytics
+from app.history import HistoryCache
+from app.instruments import venue_for_feed
 from app.config import Settings
 from app.feeds.base import FeedCallbacks, FeedConnector
 from app.feeds.binance import BinanceFuturesFeed
@@ -56,33 +58,49 @@ class MarketStreamer:
         # per-event-type counters for degradation detection
         self.book_events = 0
         self.trade_events = 0
+        self.history = HistoryCache()
         self.hybrid_mode = False
+        self.feed_degraded = False
+        self._generation = 0
+        self._seeded_symbols: set[str] = set()
+        self._backfill_lock = asyncio.Lock()
 
     # ------------------------------------------------------------------
     # Callbacks (feed → state)
     # ------------------------------------------------------------------
     def _make_callbacks(self) -> FeedCallbacks:
         state = self.state
+        generation = self._generation
 
         async def on_book(sym, bids, asks, ts_ms):
+            if generation != self._generation:
+                return
             state.get(sym).on_book(bids, asks, ts_ms or time.time() * 1000)
             state.record_ingest()
             self.book_events += 1
 
         async def on_trade(sym, ts_ms, price, qty, is_buyer_maker):
+            if generation != self._generation:
+                return
             state.get(sym).on_trade(ts_ms or time.time() * 1000, price, qty, is_buyer_maker)
             state.record_ingest()
             self.trade_events += 1
 
         async def on_candle(sym, open_ms, o, h, l, c, v):
+            if generation != self._generation:
+                return
             state.get(sym).on_candle(open_ms, o, h, l, c, v)
             state.record_ingest()
 
         async def on_ticker(sym, last, change_pct, quote_vol):
+            if generation != self._generation:
+                return
             state.get(sym).on_ticker_24h(last, change_pct, quote_vol)
             state.record_ingest()
 
         async def on_meta(sym, meta):
+            if generation != self._generation:
+                return
             st = state.get(sym)
             if "funding_rate" in meta:
                 st.funding_rate = float(meta["funding_rate"])
@@ -185,18 +203,19 @@ class MarketStreamer:
                     continue
                 if not probe:
                     continue
-                log.warning("live feed recovered via %s — switching from mock", candidate.name)
-                self.feed.stop()
-                self.feed = candidate
-                self.state.feed_mode = candidate.name
-                tickers = await candidate.fetch_universe(self.settings.top_symbols)
-                self._seed_universe(tickers)
-                candidate.set_universe(self.top_symbols)
+                try:
+                    tickers = await asyncio.wait_for(
+                        candidate.fetch_universe(self.settings.top_symbols), timeout=12,
+                    )
+                except Exception:
+                    log.warning("recovery universe fetch failed for %s", candidate.name, exc_info=True)
+                    continue
+                if not tickers:
+                    continue
+                self._activate_feed(candidate, tickers)
                 self._tasks.append(asyncio.create_task(candidate.run(), name=f"{candidate.name}-run"))
-                self._seeded_symbols.clear()
-                self._start_backfill()
+                self._tasks.append(asyncio.create_task(self._seed_candles(), name="recovery-backfill"))
                 self._tasks.append(asyncio.create_task(self._degradation_watch(), name="degradation-watch-recovered"))
-                self._tasks.append(asyncio.create_task(self._live_recovery_loop(), name="live-recovery-recovered"))
                 return
         log.info("streamer started: feed=%s symbols=%d", self.feed.name, len(self.top_symbols))
 
@@ -204,15 +223,50 @@ class MarketStreamer:
     # Candle backfill: seed 1m history from the exchange REST so charts
     # show ~5 hours of candles immediately after a cold boot.
     # ------------------------------------------------------------------
-    _seeded_symbols: set[str] = set()
+    def _activate_feed(self, candidate: FeedConnector, tickers: list[dict[str, Any]]) -> None:
+        """Commit a fully probed source without carrying market history across venues.
+
+        No awaits inside this boundary: late callbacks/REST results from the old
+        generation are rejected before they can mutate the new source's state.
+        Keep shared state/scorer objects because the API and alerts reference them.
+        """
+        if not tickers:
+            raise ValueError("cannot activate an empty universe")
+        self._generation += 1
+        if self.feed:
+            self.feed.stop()
+        for feed in self.extra_feeds:
+            feed.stop()
+        self.extra_feeds.clear()
+        self.state.symbols.clear()
+        self.state.last_message_ts_ms = None
+        self.scorer.reset()
+        self.alerts.clear()
+        self._fired_alerts.clear()
+        self._seeded_symbols.clear()
+        self.book_events = self.trade_events = 0
+        self.feed_degraded = self.hybrid_mode = False
+        candidate.callbacks = self._make_callbacks()
+        self.feed = candidate
+        self.state.feed_mode = candidate.name
+        self._seed_universe(tickers)
+        candidate.set_universe(self.top_symbols)
+        self.publish(self.build_snapshot())
 
     async def _seed_candles(self) -> None:
-        if not hasattr(self.feed, "fetch_klines"):  # MockFeed generates its own history
+        async with self._backfill_lock:
+            await self._seed_candles_locked()
+
+    async def _seed_candles_locked(self) -> None:
+        feed, generation = self.feed, self._generation
+        if not hasattr(feed, "fetch_klines"):
             return
         to_seed = [s for s in self.top_symbols if s not in self._seeded_symbols]
         for sym in to_seed:
             try:
-                klines = await asyncio.wait_for(self.feed.fetch_klines(sym, limit=300), timeout=20)
+                klines = await asyncio.wait_for(feed.fetch_klines(sym, limit=300), timeout=20)
+                if generation != self._generation:
+                    return
                 st = self.state.get(sym)
                 for t, o, h, l, c, v in klines:
                     st.on_candle(t, o, h, l, c, v)
@@ -239,9 +293,10 @@ class MarketStreamer:
                 if st is None or len(st.candles) < 10:
                     continue
                 try:
-                    pivots = detect_pivots(list(st.candles), k=3)
+                    closed = [c for c in st.candles if c.open_time + 60_000 <= time.time() * 1000]
+                    pivots = detect_pivots(closed, k=3)
                     st.pivots = pivots
-                    st.cascades = build_cascades(list(st.candles), pivots, min_touches=2)
+                    st.cascades = build_cascades(closed, pivots, min_touches=3)
                 except Exception:  # noqa: BLE001 — analytics must not kill the loop
                     log.exception("pivot detection failed for %s", sym)
             self.publish(self.build_snapshot())
@@ -249,6 +304,7 @@ class MarketStreamer:
 
     async def stop(self) -> None:
         self._stop.set()
+        await self.history.close()
         if self.feed:
             self.feed.stop()
         for f in self.extra_feeds:
@@ -272,7 +328,10 @@ class MarketStreamer:
             if not self.feed or isinstance(self.feed, MockFeed):
                 continue
             try:
-                tickers = await self.feed.fetch_universe(self.settings.top_symbols)
+                feed, generation = self.feed, self._generation
+                tickers = await feed.fetch_universe(self.settings.top_symbols)
+                if generation != self._generation:
+                    continue
                 self._seed_universe(tickers)
                 self.feed.set_universe(self.top_symbols)
                 for f in self.extra_feeds:
@@ -283,61 +342,28 @@ class MarketStreamer:
                 log.exception("universe refresh failed")
 
     # ------------------------------------------------------------------
-    # Hybrid degradation watchdog
-    #
-    # Some networks / exchange edges deliver order-book streams but silently
-    # drop trade or ticker streams. If books flow but zero trades arrive
-    # after the warmup window, a supplementary Bybit feed is launched for
-    # trades + klines + funding/tickers (books stay with the primary feed so
-    # the order book is never mixed across venues).
+    # A partial source must never be repaired by injecting another venue's
+    # trades/candles into the same symbol state. Report degradation explicitly.
+    # The connector's own reconnect loop handles transport recovery.
     # ------------------------------------------------------------------
     DEGRADE_WARMUP_S = 25.0
 
     async def _degradation_watch(self) -> None:
-        await asyncio.sleep(self.DEGRADE_WARMUP_S)
-        if self._stop.is_set() or self.feed is None or isinstance(self.feed, MockFeed):
-            return
-        if self.trade_events == 0 and self.book_events > 50:
-            log.warning(
-                "feed degradation detected on %s: %d book events but 0 trades — "
-                "launching supplementary Bybit trade feed",
-                self.feed.name, self.book_events,
-            )
-            state = self.state
-            book_events_before = self.book_events  # noqa: F841 — books stay primary-only
-
-            async def on_book_noop(_sym, _b, _a, _ts):
-                return None  # order books remain owned by the primary feed
-
-            async def on_trade(sym, ts_ms, price, qty, is_buyer_maker):
-                state.get(sym).on_trade(ts_ms or time.time() * 1000, price, qty, is_buyer_maker)
-                state.record_ingest()
-                self.trade_events += 1
-
-            async def on_candle(sym, open_ms, o, h, l, c, v):
-                state.get(sym).on_candle(open_ms, o, h, l, c, v)
-
-            async def on_ticker(sym, last, change_pct, quote_vol):
-                state.get(sym).on_ticker_24h(last, change_pct, quote_vol)
-
-            async def on_meta(sym, meta):
-                st = state.get(sym)
-                if "funding_rate" in meta:
-                    st.funding_rate = float(meta["funding_rate"])
-                if "open_interest" in meta:
-                    # raw OI is base units - convert with the live price
-                    st.open_interest_usd = float(meta["open_interest"]) * (st.price or 0.0)
-
-            from app.feeds.bybit import BybitLinearFeed
-
-            supp = BybitLinearFeed(FeedCallbacks(on_book_noop, on_trade, on_candle, on_ticker, on_meta))
-            supp.name = "bybit-trades"
-            supp.set_universe(self.top_symbols)
-            self.extra_feeds.append(supp)
-            self.hybrid_mode = True
-            self.state.feed_mode = f"{self.feed.name}+{supp.name}"
-            self._tasks.append(asyncio.create_task(supp.run(), name="bybit-trades-run"))
-            log.info("hybrid mode active: books=%s, trades=%s", self.feed.name, supp.name)
+        generation = self._generation
+        previous_books, previous_trades = self.book_events, self.trade_events
+        while not self._stop.is_set() and generation == self._generation:
+            await asyncio.sleep(self.DEGRADE_WARMUP_S)
+            if generation != self._generation or self._stop.is_set():
+                return
+            if self.feed is None or isinstance(self.feed, MockFeed):
+                return
+            books = self.book_events - previous_books
+            trades = self.trade_events - previous_trades
+            self.feed_degraded = books > 50 and trades == 0
+            previous_books, previous_trades = self.book_events, self.trade_events
+            if self.feed_degraded:
+                log.warning("source %s has books but no trades; keeping sources isolated", self.feed.name)
+            self.publish(self.build_snapshot())
 
     async def _metrics_loop(self) -> None:
         while not self._stop.is_set():
@@ -394,6 +420,8 @@ class MarketStreamer:
     # ------------------------------------------------------------------
     def build_snapshot(self) -> dict[str, Any]:
         now_ms = time.time() * 1000
+        feed_name = self.feed.name if self.feed else ""
+        venue = venue_for_feed(feed_name)
         symbols = []
         for sym in self.top_symbols:
             st = self.state.symbols.get(sym)
@@ -405,10 +433,14 @@ class MarketStreamer:
             symbols.append(
                 {
                     "symbol": sym,
+                    "instrument_id": f"{venue}:FUTURES:{sym}",
+                    "venue": venue,
+                    "market": "FUTURES",
                     "price": m.price,
                     "change5m": m.price_change_5m_pct,
                     "change24h": m.price_change_24h_pct,
                     "vol1m": m.volume_1m_usd,
+                    "vol24h": st.quote_volume_24h,
                     "vol5m": m.volume_5m_usd,
                     "surge": m.volume_surge_ratio,
                     "imbalance": m.book_imbalance,
@@ -438,12 +470,18 @@ class MarketStreamer:
                         }
                         for w in walls
                     ],
+                    "levels": [
+                        {"kind": z.kind, "low": z.low, "high": z.high,
+                         "mid": z.mid, "touches": z.touches, "timeframe": "1m"}
+                        for z in sorted(st.cascades, key=lambda z: z.touches, reverse=True)[:10]
+                    ],
                     "bookTs": st.book_ts_ms,
                 }
             )
         picks = [
             {
                 "symbol": p.symbol,
+                "instrument_id": f"{venue}:FUTURES:{p.symbol}",
                 "score": p.scalp_score,
                 "heuristic": p.heuristic_score,
                 "anomaly": p.anomaly_score,
@@ -459,6 +497,8 @@ class MarketStreamer:
             "type": "snapshot",
             "ts": now_ms,
             "feed": self.state.feed_mode,
+            "feedDegraded": self.feed_degraded,
+            "sourceGeneration": self._generation,
             "symbols": symbols,
             "picks": picks,
             "alerts": self.alerts[-10:],

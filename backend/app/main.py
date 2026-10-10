@@ -23,6 +23,7 @@ from app.alerts import AlertEngine
 from app.api import auth as auth_router
 from app.api import routes as api_routes
 from app.api import alerts_api
+from app.api import drawings_api
 from app.config import get_settings
 from app.db import init_db, dispose_db
 from app.ml_engine import ScalpScorer
@@ -116,6 +117,7 @@ async def security_headers(request, call_next):  # noqa: ANN001
 app.include_router(api_routes.router)
 app.include_router(auth_router.router)
 app.include_router(alerts_api.router)
+app.include_router(drawings_api.router)
 
 
 @app.get("/api/v1/meta")

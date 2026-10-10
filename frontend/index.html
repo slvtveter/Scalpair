@@ -3,151 +3,81 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Scalpair — AI Scalping Screener</title>
-  <meta name="description" content="Real-time order book density, AI scalp scores and setup detection. Read-only. No keys. No execution." />
+  <title>Scalpair — market intelligence</title>
+  <meta name="description" content="Real-time crypto scalping screener for traders." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/styles.css?v=0.5.2" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2313161a'/><path d='M22 68 L42 34 L56 56 L78 28' stroke='%232f9e63' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/css/styles.css?v=0.7.0" />
 </head>
 <body>
-  <!-- ================= TOOLBAR ================= -->
   <header class="toolbar">
-    <div class="brand">
-      <span class="brand-name">Scalpair</span>
-      <span class="brand-status mono" id="feed-badge">…</span>
-    </div>
+    <div class="brand"><span class="brand-mark">S</span><span class="brand-name">scalpair</span><span class="brand-status mono" id="feed-badge">connecting</span></div>
+    <div class="toolbar-divider"></div>
+    <div class="market-switch"><span class="market-dot live"></span><span>MARKETS</span><span class="chevron">⌄</span></div>
+    <div class="venue-chips"><button class="venue-chip active">ALL</button><button class="venue-chip">BI-F</button><button class="venue-chip">BY-F</button></div>
+    <div class="control-group"><span class="tb-label">TF</span><select id="board-tf" class="ctl" aria-label="Board timeframe"><option value="1">1m</option><option value="5" selected>5m</option><option value="15">15m</option><option value="60">1h</option></select></div>
+    <div class="control-group"><span class="tb-label">SORT</span><select id="sort-by" class="ctl" aria-label="Sort by"><option value="score" selected>Scalp score</option><option value="surge">Volume surge</option><option value="vol1m">1m volume</option><option value="speed">Price speed</option><option value="change5m">5m change</option><option value="levelDist">To level</option></select></div>
+    <button id="sort-direction" class="ctl" aria-label="Направление сортировки">↓</button>
+    <div class="toolbar-spacer"></div>
 
-    <input id="search" class="ctl search-input" type="search" placeholder="Поиск…" aria-label="Symbol search" />
-
-    <div class="tb-group">
-      <label class="tb-label">Сетка</label>
-      <select id="grid-size" class="ctl" aria-label="Board grid size">
-        <option value="1">1×1</option>
-        <option value="2">2×2</option>
-        <option value="3" selected>3×3</option>
-        <option value="4">4×4</option>
-      </select>
-    </div>
-
-    <div class="tb-group">
-      <label class="tb-label">ТФ</label>
-      <select id="board-tf" class="ctl" aria-label="Board timeframe">
-        <option value="1">1m</option>
-        <option value="5" selected>5m</option>
-        <option value="15">15m</option>
-        <option value="60">1h</option>
-      </select>
-    </div>
-
-    <div class="tb-group">
-      <label class="tb-label">Сорт</label>
-      <select id="sort-by" class="ctl" aria-label="Sort by">
-        <option value="score" selected>Скоринг</option>
-        <option value="surge">Всплеск</option>
-        <option value="vol1m">Объём 1м</option>
-        <option value="speed">Скорость</option>
-        <option value="change5m">5м %</option>
-        <option value="levelDist">До уровня</option>
-      </select>
-    </div>
-
-    <button id="page-prev" class="ctl ctl-btn" aria-label="Previous page">‹</button>
-    <span id="page-ind" class="mono page-ind">1/1</span>
-    <button id="page-next" class="ctl ctl-btn" aria-label="Next page">›</button>
-
-    <div class="tb-spacer"></div>
-
-    <button id="bell" class="ctl ctl-btn" aria-label="Notifications">Алерты<span id="bell-count" class="bell-count hidden">0</span></button>
-    <button id="burger" class="ctl ctl-btn burger" aria-label="Settings">☰</button>
+    <button class="auto-chip active">↗ AUTO</button>
+    <label class="search-wrap"><span>⌕</span><input id="search" type="search" placeholder="Search markets" aria-label="Symbol search" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="search-results" /></label>
+    <div id="search-results" class="search-results hidden" role="listbox" aria-label="Результаты поиска"></div>
+    <button id="bell" class="icon-btn" aria-label="Notifications">♧<span id="bell-count" class="bell-count hidden">0</span></button>
+    <button id="burger" class="icon-btn" aria-label="Settings">⚙</button>
+    <div class="profile-chip">SV</div>
   </header>
 
-  <!-- burger settings -->
   <div id="settings-menu" class="settings-menu hidden">
-    <div class="set-row"><span id="set-feed-label">Фид</span><span class="mono" id="set-feed">—</span></div>
-    <div class="set-row"><span id="set-sound-label">Звук (скор ≥ 85)</span><button id="sound-toggle" class="ctl ctl-btn" aria-label="Toggle alert sound">Звук выкл</button></div>
-    <div class="set-row"><span id="set-lang-label">Язык / Language</span><button id="lang-toggle" class="ctl ctl-btn">RU</button></div>
-    <div class="set-row"><span id="set-score-label">Мин. скоринг</span>
-      <select id="min-score" class="ctl" aria-label="Minimum AI score filter">
-        <option value="0" selected>≥ 0</option>
-        <option value="40">≥ 40</option>
-        <option value="60">≥ 60</option>
-        <option value="80">≥ 80</option>
-        <option value="90">≥ 90</option>
-      </select>
-    </div>
-    <div class="set-row"><span id="set-wall-label">Мин. стена</span>
-      <select id="wall-filter" class="ctl" aria-label="Wall notional filter">
-        <option value="0" selected>все</option>
-        <option value="250000">≥ $250K</option>
-        <option value="1000000">≥ $1M</option>
-        <option value="5000000">≥ $5M</option>
-      </select>
-    </div>
+    <div class="menu-title">Workspace settings <button class="menu-close" onclick="document.getElementById('settings-menu').classList.add('hidden')">×</button></div>
+    <div class="set-row"><span id="set-feed-label">Feed</span><span class="mono" id="set-feed">—</span></div>
+    <div class="set-row"><span id="set-sound-label">Sound</span><button id="sound-toggle" class="ctl ctl-btn">Sound off</button></div>
+    <div class="set-row"><span id="set-lang-label">Language</span><button id="lang-toggle" class="ctl ctl-btn">RU</button></div>
+    <div class="set-row"><span id="set-score-label">Min. score</span><select id="min-score" class="ctl"><option value="0">All</option><option value="40">≥ 40</option><option value="60">≥ 60</option><option value="80">≥ 80</option><option value="90">≥ 90</option></select></div>
+    <div class="set-row"><span id="set-wall-label">Min. wall</span><select id="wall-filter" class="ctl"><option value="0">All</option><option value="250000">≥ $250K</option><option value="1000000">≥ $1M</option><option value="5000000">≥ $5M</option></select></div>
+  </div>
+  <div id="notif-panel" class="notif-panel hidden mono"></div><div id="toasts" class="toasts"></div>
+
+  <div class="subbar">
+    <div class="subbar-left"><span class="eyebrow">SCREENER</span><span class="subbar-title">Live market board</span><span class="live-pill">Подключение</span></div>
+    <div class="subbar-actions">
+      <label class="overlay-control"><input id="show-levels" type="checkbox" checked/><span id="levels-label">Уровни</span></label>
+      <label class="overlay-control"><input id="show-walls" type="checkbox" checked/><span id="walls-label">Плотности</span></label>
+      <details id="market-filters" class="market-filters">
+        <summary class="ctl"><span id="filters-label">Фильтры</span> <span id="filters-count">0</span></summary>
+        <form id="filters-form" class="filters-popover">
+          <div id="filters-fields"></div>
+          <p id="filters-error" role="alert"></p>
+          <div class="filter-actions"><button id="filters-apply" class="ctl" type="submit">Применить</button><button id="filters-reset" class="ctl" type="button">Сбросить</button></div>
+          <label><span id="presets-label">Сохранённые фильтры</span><select id="filter-presets" class="ctl"><option value="">—</option></select></label>
+          <div class="filter-actions"><input id="preset-name" maxlength="40" aria-label="Название набора фильтров" placeholder="Название"/><button id="preset-save" class="ctl" type="button">Сохранить</button><button id="preset-delete" class="ctl" type="button">Удалить</button></div>
+        </form>
+      </details><button class="view-chip active">▦ <span>Board</span></button><button class="view-chip">☷ <span>List</span></button><span class="subbar-sep"></span><span class="tb-label">GRID</span><select id="grid-size" class="ctl grid-select"><option value="1">1×1</option><option value="2">2×2</option><option value="3" selected>3×3</option><option value="4">4×4</option></select><button id="page-prev" class="page-btn">‹</button><span id="page-ind" class="mono page-ind">1/1</span><button id="page-next" class="page-btn">›</button></div>
   </div>
 
-  <!-- notifications panel -->
-  <div id="notif-panel" class="notif-panel hidden mono"></div>
-  <div id="toasts" class="toasts"></div>
-
-  <!-- ================= MAIN: board (center) + coin list (right) ================= -->
   <main class="layout">
-    <section class="panel board-panel">
-      <div class="board-grid" id="board-grid"></div>
-      <div class="empty-note board-empty-note" id="board-empty">ожидание данных…</div>
-    </section>
-
+    <section class="panel board-panel"><div class="board-grid" id="board-grid"></div><div class="empty-note board-empty-note" id="board-empty">Waiting for market data…</div></section>
     <aside class="sidebar">
-      <div class="side-tabs">
-        <button class="side-tab active" data-tab="coins">Монеты</button>
-        <button class="side-tab" data-tab="alerts">Алерты</button>
-      </div>
+      <div class="sidebar-head"><div><span class="eyebrow">WATCHLIST</span><h2>Markets <span class="count">(0)</span></h2></div><button id="group-create" class="small-icon" aria-label="Создать группу">＋</button></div>
+      <div class="group-controls"><select id="group-select" class="ctl" aria-label="Группа монет"></select><button id="group-edit" class="ctl" type="button">Изменить</button></div>
+      <div class="side-tabs"><button class="side-tab active" data-tab="coins">Tickers</button><button class="side-tab" data-tab="alerts">Alerts </button></div>
+      <div class="list-head"><span>MARKET</span><span>PRICE / 5M</span><span>SCORE</span></div>
       <div id="tab-coins" class="coin-list" role="list"></div>
-      <div id="tab-alerts" class="coin-list hidden">
-        <div class="notif-inline" id="alerts-inline">
-          <div class="empty-note">войдите через «Алерты», чтобы видеть серверные оповещения</div>
-        </div>
-      </div>
+      <div id="tab-alerts" class="coin-list hidden"><div class="notif-inline" id="alerts-inline"><div class="empty-note">Sign in to see server alerts</div></div></div>
+      <div class="density-panel"><div class="density-head"><div><span class="eyebrow">ORDER FLOW</span><h3>Density map</h3></div><span class="density-live"><i></i> Ожидание стакана</span></div><div class="density-map"><div class="density-axis"><span>3%</span><span>2%</span><span>1%</span><span>mid</span><span>1%</span><span>2%</span><span>3%</span></div><div class="density-grid" id="density-grid"><div class="density-zone ask-zone"></div><div class="midline"><span id="density-mid">0% · от mid каждого инструмента</span></div><div class="density-zone bid-zone"></div></div></div><div class="density-legend"><span>Только полученные уровни L2 · неполная глубина</span></div></div>
     </aside>
   </main>
 
-  <!-- ================= FOCUS MODAL ================= -->
-  <div id="chart-modal" class="modal hidden">
-    <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="chart-title">
-      <div class="modal-head">
-        <h3 id="chart-title" class="mono">—</h3>
-        <div class="modal-head-right">
-          <div class="tf-picker" id="tf-picker" role="group" aria-label="Timeframe">
-            <button class="tf-btn active" data-tf="1">1m</button>
-            <button class="tf-btn" data-tf="5">5m</button>
-            <button class="tf-btn" data-tf="15">15m</button>
-            <button class="tf-btn" data-tf="60">1h</button>
-          </div>
-          <span id="chart-tag" class="tag-text"></span>
-          <button id="chart-close" class="ctl ctl-btn">Закрыть</button>
-        </div>
-      </div>
-      <canvas id="chart-canvas" width="900" height="380"></canvas>
-      <div class="chart-alert-row">
-        <span class="mono" style="color:var(--text-3)">alert:</span>
-        <span id="alert-symbol" class="mono">—</span>
-        <select id="alert-type" aria-label="Alert rule type">
-          <option value="price_cross_above">цена выше</option>
-          <option value="price_cross_below">цена ниже</option>
-          <option value="pct_move">движение %</option>
-          <option value="volume_surge">всплеск объёма x</option>
-          <option value="score_above">скоринг ≥</option>
-        </select>
-        <input id="alert-threshold" type="number" step="any" min="0" placeholder="порог" />
-        <button id="alert-create" class="ctl ctl-btn">Создать алерт</button>
-      </div>
-      <p id="chart-thesis" class="modal-thesis mono"></p>
-    </div>
-  </div>
-
+  <dialog id="group-dialog">
+    <form id="group-form"><h3 id="group-editor-title">Группа</h3>
+      <label><span id="group-name-label">Название</span><input id="group-name" required maxlength="40"/></label>
+      <label><span id="group-color-label">Цвет</span><select id="group-color"></select></label>
+      <p id="group-error" role="alert"></p>
+      <div class="filter-actions"><button id="group-save" class="ctl" type="submit">Сохранить</button><button id="group-delete" class="ctl" type="button">Удалить</button><button id="group-cancel" class="ctl" type="button">Отмена</button></div>
+    </form>
+  </dialog>
+  <div id="chart-modal" class="modal hidden"><div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="chart-title"><div class="modal-head"><h3 id="chart-title" class="mono">—</h3><div class="modal-head-right"><label class="focus-layout-label">Окна <select id="focus-layout" class="ctl" aria-label="Количество графиков Focus"><option value="1">1</option><option value="2" selected>2</option><option value="4">4</option></select></label><label class="overlay-control"><input id="focus-crosshair-sync" type="checkbox" checked/>Sync cursor</label><label class="overlay-control"><input id="focus-range-sync" type="checkbox"/>Sync range</label><span id="chart-tag" class="tag-text"></span><select id="chart-group" class="ctl" aria-label="Группа для монеты"></select><button id="chart-group-toggle" class="ctl" type="button">В группу</button><button id="chart-hide" class="ctl" type="button">Скрыть с доски</button><button id="chart-fullscreen" class="ctl" type="button">Fullscreen</button><button id="chart-close" class="ctl ctl-btn">Close</button></div></div><div id="focus-grid" class="focus-grid" data-layout="2"><section class="focus-pane" data-pane="0"><div class="focus-pane-tools"><div class="drawing-tools" role="toolbar" aria-label="Инструменты рисунка"><button class="ctl draw-btn active" data-draw="none" type="button">Курсор</button><button class="ctl draw-btn" data-draw="horizontal" type="button">Гор.</button><button class="ctl draw-btn" data-draw="trend" type="button">Тренд</button><button class="ctl draw-btn" data-draw="rectangle" type="button">Зона</button><button class="ctl draw-btn" data-draw="fib" type="button">Fib</button><button class="ctl draw-btn" data-draw="ruler" type="button">Линейка</button><button class="ctl draw-btn" data-draw="pencil" type="button">Карандаш</button><button class="ctl" id="draw-undo" type="button">Отменить</button><button class="ctl" id="draw-clear" type="button">Очистить</button></div><div class="pane-overlays"><label><input type="checkbox" class="pane-overlay-levels" data-pane="0" checked>Уровни</label><label><input type="checkbox" class="pane-overlay-walls" data-pane="0" checked>Стакан</label><label><input type="checkbox" class="pane-overlay-volume" data-pane="0" checked>Объём</label></div><div class="tf-picker" id="tf-picker"><button class="tf-btn active" data-tf="1">1m</button><button class="tf-btn" data-tf="3">3m</button><button class="tf-btn" data-tf="5">5m</button><button class="tf-btn" data-tf="15">15m</button><button class="tf-btn" data-tf="30">30m</button><button class="tf-btn" data-tf="60">1h</button><button class="tf-btn" data-tf="240">4h</button><button class="tf-btn" data-tf="1440">1D</button></div></div><p id="chart-history-status" role="status" aria-live="polite"></p><canvas id="chart-canvas" width="900" height="380"></canvas></section><section class="focus-pane" data-pane="1"><label class="focus-pane-tools">ТФ <select id="focus-tf-1" class="ctl" aria-label="Таймфрейм окна 2"><option value="1">1m</option><option value="3">3m</option><option value="5">5m</option><option value="15">15m</option><option value="30">30m</option><option value="60">1h</option><option value="240">4h</option><option value="1440" selected>1D</option></select></label><span class="pane-overlays"><label><input type="checkbox" class="pane-overlay-levels" data-pane="1" checked>Уровни</label><label><input type="checkbox" class="pane-overlay-walls" data-pane="1" checked>Стакан</label><label><input type="checkbox" class="pane-overlay-volume" data-pane="1" checked>Объём</label></span><p id="chart-history-status-1" class="chart-history-status" role="status"></p><canvas id="chart-canvas-1" width="600" height="360"></canvas></section><section class="focus-pane" data-pane="2"><label class="focus-pane-tools">ТФ <select id="focus-tf-2" class="ctl" aria-label="Таймфрейм окна 3"><option value="1">1m</option><option value="3">3m</option><option value="5" selected>5m</option><option value="15">15m</option><option value="30">30m</option><option value="60">1h</option><option value="240">4h</option><option value="1440">1D</option></select></label><span class="pane-overlays"><label><input type="checkbox" class="pane-overlay-levels" data-pane="2" checked>Уровни</label><label><input type="checkbox" class="pane-overlay-walls" data-pane="2" checked>Стакан</label><label><input type="checkbox" class="pane-overlay-volume" data-pane="2" checked>Объём</label></span><p id="chart-history-status-2" class="chart-history-status" role="status"></p><canvas id="chart-canvas-2" width="600" height="360"></canvas></section><section class="focus-pane" data-pane="3"><label class="focus-pane-tools">ТФ <select id="focus-tf-3" class="ctl" aria-label="Таймфрейм окна 4"><option value="1">1m</option><option value="3">3m</option><option value="5">5m</option><option value="15">15m</option><option value="30">30m</option><option value="60" selected>1h</option><option value="240">4h</option><option value="1440">1D</option></select></label><span class="pane-overlays"><label><input type="checkbox" class="pane-overlay-levels" data-pane="3" checked>Уровни</label><label><input type="checkbox" class="pane-overlay-walls" data-pane="3" checked>Стакан</label><label><input type="checkbox" class="pane-overlay-volume" data-pane="3" checked>Объём</label></span><p id="chart-history-status-3" class="chart-history-status" role="status"></p><canvas id="chart-canvas-3" width="600" height="360"></canvas></section></div><div class="chart-alert-row"><span class="mono">alert:</span><span id="alert-symbol" class="mono">—</span><select id="alert-type"><option value="price_cross_above">price above</option><option value="price_cross_below">price below</option><option value="pct_move">move %</option><option value="volume_surge">volume surge x</option><option value="score_above">score ≥</option><option value="cascade_distance">near cascade %</option><option value="density_appeared">large density USDT</option></select><input id="alert-threshold" type="number" step="any" min="0" placeholder="threshold" /><button id="alert-create" class="ctl ctl-btn">Create alert</button></div><p id="chart-thesis" class="modal-thesis mono"></p></div></div>
   <div class="clock-corner mono" id="clock">--:--:--</div>
-
-  <script src="/js/app.js?v=0.5.2"></script>
-</body>
-</html>
+  <script src="/js/app.js?v=0.7.0"></script>
+</body></html>

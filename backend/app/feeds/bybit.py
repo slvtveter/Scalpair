@@ -50,6 +50,8 @@ class BybitLinearFeed(FeedConnector):
             async with sess.get(url, params={"category": "linear"}) as resp:
                 resp.raise_for_status()
                 body = await resp.json()
+        if body.get("retCode", 0) != 0:
+            raise ValueError("Bybit history request rejected")
         rows = (body.get("result") or {}).get("list") or []
         tickers = []
         for row in rows:
@@ -70,14 +72,14 @@ class BybitLinearFeed(FeedConnector):
         tickers.sort(key=lambda t: t["quote_volume_24h"], reverse=True)
         return tickers[:n]
 
-    async def fetch_klines(self, symbol: str, limit: int = 300) -> list[tuple]:
+    async def fetch_klines(self, symbol: str, limit: int = 300, timeframe: str = "1m") -> list[tuple]:
         """Backfill 1m OHLCV via public REST (Bybit interval "1"): [(open_ms, o, h, l, c, v)]."""
         url = f"{REST_BASE}/v5/market/kline"
         timeout = aiohttp.ClientTimeout(total=15)
         async with aiohttp.ClientSession(timeout=timeout) as sess:
             async with sess.get(
                 url,
-                params={"category": "linear", "symbol": symbol, "interval": "1", "limit": min(limit, 1000)},
+                params={"category": "linear", "symbol": symbol, "interval": {"1m":"1", "3m":"3", "5m":"5", "15m":"15", "30m":"30", "1h":"60", "4h":"240", "1D":"D"}[timeframe], "limit": min(limit, 1000)},
             ) as resp:
                 resp.raise_for_status()
                 body = await resp.json()

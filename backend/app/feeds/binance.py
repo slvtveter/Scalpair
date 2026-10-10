@@ -91,12 +91,12 @@ class BinanceFuturesFeed(FeedConnector):
             if s.get("underlyingType") == "COIN" and s.get("quoteAsset") == "USDT"
         }
 
-    async def fetch_klines(self, symbol: str, limit: int = 300) -> list[tuple]:
+    async def fetch_klines(self, symbol: str, limit: int = 300, timeframe: str = "1m") -> list[tuple]:
         """Backfill 1m OHLCV via public REST: [(open_ms, o, h, l, c, v)]."""
         url = f"{REST_BASE}/fapi/v1/klines"
         timeout = aiohttp.ClientTimeout(total=15)
         async with aiohttp.ClientSession(timeout=timeout) as sess:
-            async with sess.get(url, params={"symbol": symbol, "interval": "1m", "limit": limit}) as resp:
+            async with sess.get(url, params={"symbol": symbol, "interval": "1d" if timeframe == "1D" else timeframe, "limit": limit}) as resp:
                 resp.raise_for_status()
                 rows = await resp.json()
         out = []

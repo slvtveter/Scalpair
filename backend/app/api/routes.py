@@ -12,14 +12,16 @@ import contextlib
 import json
 import logging
 import time
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import JSONResponse
 
 from app.api.auth import User, current_user
+from app.instruments import venue_for_feed
 from app.config import get_settings
 from app.models import HealthReport
+from app.history import TIMEFRAMES, aggregate_history
 
 log = logging.getLogger("scalpair.api")
 
@@ -43,7 +45,7 @@ async def health(request: Request) -> HealthReport:
     feeds = [streamer.feed.name] if streamer and streamer.feed else []
     feeds += [f.name for f in (streamer.extra_feeds if streamer else [])]
     return HealthReport(
-        status="ok" if last_age is None or last_age < 30_000 else "degraded",
+        status="ok" if not streamer.feed_degraded and (last_age is None or last_age < 30_000) else "degraded",
         uptime_s=round(time.time() - START_TIME, 1),
         active_feeds=feeds,
         active_ws_clients=broadcaster.client_count,
@@ -64,6 +66,8 @@ async def densities(request: Request, limit: int = Query(50, ge=1, le=200)) -> J
     """All active density walls across tracked markets, biggest first."""
     state = request.app.state.market_state
     streamer = request.app.state.streamer
+    feed_name = streamer.feed.name if streamer.feed else ""
+    venue = venue_for_feed(feed_name)
     walls = []
     for sym in streamer.top_symbols:
         st = state.symbols.get(sym)
@@ -73,6 +77,7 @@ async def densities(request: Request, limit: int = Query(50, ge=1, le=200)) -> J
             walls.append(
                 {
                     "symbol": sym,
+                    "venue": venue,
                     "side": w["side"],
                     "price": w["price"],
                     "notional_usd": w["notional_usd"],
@@ -80,10 +85,12 @@ async def densities(request: Request, limit: int = Query(50, ge=1, le=200)) -> J
                     "distance_pct": w["distance_pct"],
                     "seconds_to_eat": w.get("seconds_to_eat"),
                     "detected_at": w["detected_at"],
+                    "age_s": w.get("age_s", 0.0),
+                    "book_ts": st.book_ts_ms,
                 }
             )
     walls.sort(key=lambda w: w["notional_usd"], reverse=True)
-    return JSONResponse({"ts": int(time.time() * 1000), "walls": walls[:limit], "total": len(walls)})
+    return JSONResponse({"ts": int(time.time() * 1000), "walls": walls[:limit], "total": len(walls), "feed": state.feed_mode})
 
 
 @router.get("/screeners/ai-picks")
@@ -127,10 +134,13 @@ async def symbols(request: Request) -> JSONResponse:
             "symbols": [
                 {
                     "symbol": s,
+                    "instrument_id": f"{venue_for_feed(streamer.feed.name if streamer.feed else "")}:FUTURES:{s}",
                     "price": request.app.state.market_state.symbols[s].price,
                     "quote_volume_24h": request.app.state.market_state.symbols[s].quote_volume_24h,
+                    "venue": venue_for_feed(streamer.feed.name if streamer.feed else ""),
+                    "market": "FUTURES",
                 }
-                for s in streamer.top_symbols
+                for s in streamer.top_symbols if s in request.app.state.market_state.symbols
             ],
         }
     )
@@ -141,24 +151,45 @@ async def candles(
     request: Request,
     symbol: str,
     limit: int = Query(300, ge=10, le=500),
+    timeframe: Literal["1m", "3m", "5m", "15m", "30m", "1h", "4h", "1D"] = "1m",
 ) -> JSONResponse:
     """1-minute OHLCV candles + current walls for the chart view."""
     state = request.app.state.market_state
     st = state.symbols.get(symbol.upper())
     if st is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"unknown symbol {symbol}")
+    streamer = request.app.state.streamer
+    feed, generation = streamer.feed, streamer._generation
+    source = "stream"
+    history = aggregate_history(list(st.candles), TIMEFRAMES[timeframe])[-limit:]
+    limited = timeframe != "1m"
+    if timeframe != "1m" and feed is not None and hasattr(feed, "fetch_klines"):
+        try:
+            history = await streamer.history.get(generation, feed, st.symbol, timeframe, limit)
+        except Exception as exc:
+            raise HTTPException(503, "Exchange history temporarily unavailable") from exc
+        if generation != streamer._generation or feed is not streamer.feed:
+            raise HTTPException(409, "Market source changed; retry history request")
+        source = "exchange_rest"
+        limited = False
     return JSONResponse(
         {
             "symbol": st.symbol,
-            "candles": [
-                {"t": c.open_time, "o": c.open, "h": c.high, "l": c.low, "c": c.close, "v": c.volume}
-                for c in list(st.candles)[-limit:]
-            ],
+            "instrument_id": f"{venue_for_feed(feed.name if feed else "")}:FUTURES:{st.symbol}",
+            "timeframe": timeframe,
+            "feed": state.feed_mode,
+            "venue": venue_for_feed(feed.name if feed else ""),
+            "sourceGeneration": generation,
+            "historySource": source,
+            "limitedHistory": limited,
+            "levelTimeframe": "1m",
+            "candles": history,
             "walls": [
                 {
                     "side": w["side"],
                     "price": w["price"],
                     "notional": w["notional_usd"],
+                    "age_s": w.get("age_s", 0.0),
                 }
                 for w in sorted(st.walls.values(), key=lambda w: w["notional_usd"], reverse=True)[:6]
             ],

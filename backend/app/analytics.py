@@ -172,6 +172,9 @@ def compute_metrics(state: MarketState, sym_state: SymbolState, now_ms: float) -
 def refresh_walls(sym_state: SymbolState, multiplier: float) -> None:
     """Recompute the wall map for one symbol from its latest book snapshot."""
     if not sym_state.bids or not sym_state.asks:
+        # A missing book invalidates prior densities; never carry their age
+        # across a disconnect or empty snapshot.
+        sym_state.walls = {}
         return
     median = sym_state.median_level_notional()
     found = detect_walls(sym_state.bids, sym_state.asks, median, multiplier)
@@ -182,6 +185,10 @@ def refresh_walls(sym_state: SymbolState, multiplier: float) -> None:
         key = (w["side"], round(w["price"], 8))
         w["seconds_to_eat"] = seconds_to_eat_wall(w["notional_usd"], v5m)
         w["symbol"] = sym_state.symbol
-        w["detected_at"] = now_ms
+        previous = sym_state.walls.get(key)
+        # Age is continuous observation of this price level; a reappearing
+        # level starts fresh after disappearance/reconnect.
+        w["detected_at"] = previous.get("detected_at", now_ms) if previous else now_ms
+        w["age_s"] = max(0.0, (now_ms - w["detected_at"]) / 1000.0)
         new_map[key] = w
     sym_state.walls = new_map

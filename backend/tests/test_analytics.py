@@ -196,3 +196,13 @@ class TestRefreshWalls:
         assert wall["seconds_to_eat"] is not None
         assert wall["seconds_to_eat"] > 0
         assert wall["symbol"] == "TESTUSDT"
+
+    def test_wall_age_survives_refresh_and_resets_after_disappearance(self):
+        sym=SymbolState("TESTUSDT"); bids=[(100.0,1000.0)]+[(99.0-i,1.0) for i in range(15)]; asks=[(101.0,1.0)]+[(102.0+i,1.0) for i in range(15)]
+        sym.on_book(bids,asks,1_000_000); sym.level_samples.extend([100.0]*100); refresh_walls(sym,3.0)
+        first=next(iter(sym.walls.values()))["detected_at"]
+        sym.on_book(bids,asks,4_000_000); refresh_walls(sym,3.0)
+        same=next(iter(sym.walls.values())); assert same["detected_at"]==first and same["age_s"]==pytest.approx(3000.0)
+        sym.on_book([],[],5_000_000); refresh_walls(sym,3.0)
+        sym.on_book(bids,asks,6_000_000); refresh_walls(sym,3.0)
+        assert next(iter(sym.walls.values()))["detected_at"]==6_000_000

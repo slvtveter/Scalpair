@@ -59,3 +59,8 @@ export RENDER_KEY=rnd_...
 | `TOP_SYMBOLS` | 30 free / 50+ paid |
 | `JWT_SECRET` | генерируется blueprint'ом |
 | `TELEGRAM_BOT_TOKEN` | опционально; без него алерты остаются in-app |
+
+
+## SPA routes
+
+The blueprint rewrites `/en` and `/en/*` to the frontend entrypoint so the language URL can be opened directly instead of returning Render's 404.

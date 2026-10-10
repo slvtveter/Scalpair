@@ -31,7 +31,8 @@ def client():
         deadline = time.time() + 10
         while time.time() < deadline:
             try:
-                if len(c.get("/api/v1/screeners/overview").json()["symbols"]) > 0:
+                if (len(c.get("/api/v1/screeners/overview").json()["symbols"]) > 0
+                    and c.get("/api/v1/markets/BTCUSDT/candles").json().get("candles")):
                     break
             except Exception:
                 pass
@@ -120,6 +121,14 @@ class TestAuth:
         r = client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
         assert r.status_code == 200
         assert r.json()["email"] == email
+
+        headers = {"Authorization": f"Bearer {token}"}
+        payload = {"drawings": [{"type": "horizontal", "a": {"t": 1, "p": 100}}]}
+        r = client.put("/api/v1/drawings/BTCUSDT", json=payload, headers=headers)
+        assert r.status_code == 200
+        assert r.json()["drawings"] == payload["drawings"]
+        assert client.get("/api/v1/drawings/BTCUSDT", headers=headers).json()["drawings"] == payload["drawings"]
+        assert client.get("/api/v1/drawings/BTCUSDT").status_code == 401
 
     def test_duplicate_register_conflict(self, client):
         email = f"dup{time.time_ns()}@scalpair.dev"

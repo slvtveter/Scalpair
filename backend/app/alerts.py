@@ -21,10 +21,11 @@ from sqlalchemy import select
 from app.config import Settings
 from app.db import AlertEvent, AlertRule, NotificationDelivery, TelegramLink, get_session_factory
 from app.state import MarketState
+from app.instruments import venue_for_feed
 
 log = logging.getLogger("scalpair.alerts")
 
-RULE_TYPES = {"price_cross_above", "price_cross_below", "pct_move", "volume_surge", "score_above"}
+RULE_TYPES = {"price_cross_above", "price_cross_below", "pct_move", "volume_surge", "score_above", "cascade_distance", "density_appeared"}
 
 
 class AlertEngine:
@@ -62,12 +63,20 @@ class AlertEngine:
     # ------------------------------------------------------------------
     # Evaluation
     # ------------------------------------------------------------------
+    def _rule_matches_instrument(self, rule: AlertRule) -> bool:
+        if not rule.instrument_id:
+            return True
+        current_id = f"{venue_for_feed(self.state.feed_mode)}:FUTURES:{rule.symbol.upper()}"
+        return current_id == rule.instrument_id
+
     async def _evaluate(self) -> None:
         factory = get_session_factory(self.settings.database_url)
         async with factory() as sess:
             rules = (await sess.execute(select(AlertRule).where(AlertRule.enabled.is_(True)))).scalars().all()
             now_s = time.time()
             for rule in rules:
+                if not self._rule_matches_instrument(rule):
+                    continue
                 if rule.last_triggered_at and now_s - rule.last_triggered_at < rule.cooldown_s:
                     continue
                 price = self.state.symbols.get(rule.symbol.upper()).price if rule.symbol.upper() in self.state.symbols else None
@@ -76,6 +85,11 @@ class AlertEngine:
                     # keep the anchor updated for edge detection
                     if rule.rule_type in ("price_cross_above", "price_cross_below") and price is not None:
                         rule.last_value = price
+                    elif rule.rule_type in ("cascade_distance", "density_appeared"):
+                        if rule.rule_type == "cascade_distance":
+                            rule.last_value = 1.0 if observed is not None and observed <= rule.threshold else 0.0
+                        else:
+                            rule.last_value = 1.0 if observed is not None and observed >= rule.threshold else 0.0
                     continue
                 event_id = uuid.uuid4().hex
                 message = self._message(rule, observed)
@@ -97,7 +111,10 @@ class AlertEngine:
                 sess.add(NotificationDelivery(event_db_id=event_row.id, channel="in_app"))
                 if await self._user_has_telegram(sess, rule.user_id):
                     sess.add(NotificationDelivery(event_db_id=event_row.id, channel="telegram"))
-                rule.last_value = price if price is not None else rule.threshold
+                if rule.rule_type in ("cascade_distance", "density_appeared"):
+                    rule.last_value = 1.0
+                else:
+                    rule.last_value = price if price is not None else rule.threshold
                 rule.last_triggered_at = now_s
                 if not rule.recurring:
                     rule.enabled = False
@@ -138,6 +155,21 @@ class AlertEngine:
             pick = self.scorer.picks.get(rule.symbol.upper())
             score = pick.scalp_score if pick else None
             return (score is not None and score >= rule.threshold), score
+        if rule.rule_type == "cascade_distance":
+            sym = self.state.symbols.get(rule.symbol.upper())
+            if not sym or not price or price <= 0: return False, None
+            distances = [abs(price - z.mid) / price * 100.0 for z in sym.cascades if z.mid > 0]
+            distance = min(distances, default=None)
+            condition = distance is not None and distance <= rule.threshold
+            fired = condition and rule.last_value is not None and rule.last_value < 0.5
+            return fired, distance
+        if rule.rule_type == "density_appeared":
+            sym = self.state.symbols.get(rule.symbol.upper())
+            if not sym: return False, None
+            largest = max((float(w.get("notional_usd", 0)) for w in sym.walls.values()), default=0.0)
+            condition = largest >= rule.threshold
+            fired = condition and rule.last_value is not None and rule.last_value < 0.5
+            return fired, largest
         return False, None
 
     def _message(self, rule: AlertRule, observed: float | None) -> str:
@@ -150,6 +182,10 @@ class AlertEngine:
             return f"{rule.symbol} moved {observed:.2f}% ≥ {rule.threshold:g}% within {rule.window_s}s"
         if rule.rule_type == "volume_surge":
             return f"{rule.symbol} volume surge {observed:.1f}x ≥ {rule.threshold:g}x"
+        if rule.rule_type == "cascade_distance":
+            return f"{rule.symbol} is {observed:.3f}% from cascade ≤ {rule.threshold:g}%"
+        if rule.rule_type == "density_appeared":
+            return f"{rule.symbol} large density appeared: {observed:,.0f} USDT ≥ {rule.threshold:,.0f}"
         return f"{rule.symbol} scalp score {observed:.0f} ≥ {rule.threshold:g}"
 
     async def _user_has_telegram(self, sess, user_id: int) -> bool:

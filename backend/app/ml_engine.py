@@ -269,6 +269,13 @@ class ScalpScorer:
         self.last_tick = 0.0
         self._smoothed: dict[str, float] = {}
 
+    def reset(self) -> None:
+        """Discard source-specific learning and picks when the market source changes."""
+        self.anomaly = AnomalyModel()
+        self.picks.clear()
+        self._smoothed.clear()
+        self.last_tick = 0.0
+
     def score_symbol(self, state: MarketState, symbol: str, now_ms: float | None = None) -> AiPick | None:
         sym = state.symbols.get(symbol)
         if sym is None or sym.price <= 0:

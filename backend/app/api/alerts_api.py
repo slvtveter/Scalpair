@@ -29,7 +29,8 @@ def _require_user(user: User | None) -> User:
 
 class RuleIn(BaseModel):
     symbol: str = Field(min_length=5, max_length=32)
-    rule_type: Literal["price_cross_above", "price_cross_below", "pct_move", "volume_surge", "score_above"]
+    instrument_id: str | None = Field(default=None, min_length=3, max_length=128)
+    rule_type: Literal["price_cross_above", "price_cross_below", "pct_move", "volume_surge", "score_above", "cascade_distance", "density_appeared"]
     threshold: float = Field(gt=0)
     window_s: int = Field(default=60, ge=10, le=3600)
     cooldown_s: int = Field(default=300, ge=30, le=86400)
@@ -44,7 +45,7 @@ class RuleOut(RuleIn):
 
 def _rule_out(r: AlertRule) -> RuleOut:
     return RuleOut(
-        id=r.id, symbol=r.symbol, rule_type=r.rule_type, threshold=r.threshold,
+        id=r.id, symbol=r.symbol, instrument_id=r.instrument_id, rule_type=r.rule_type, threshold=r.threshold,
         window_s=r.window_s, cooldown_s=r.cooldown_s, recurring=r.recurring,
         enabled=r.enabled, last_triggered_at=r.last_triggered_at,
     )
@@ -56,7 +57,7 @@ async def create_rule(body: RuleIn, user: AUTHORIZED) -> RuleOut:
     factory = get_session_factory(get_settings().database_url)
     async with factory() as sess:
         rule = AlertRule(
-            user_id=user.id, symbol=body.symbol.upper(), rule_type=body.rule_type,
+            user_id=user.id, symbol=body.symbol.upper(), instrument_id=body.instrument_id, rule_type=body.rule_type,
             threshold=body.threshold, window_s=body.window_s, cooldown_s=body.cooldown_s,
             recurring=body.recurring,
         )

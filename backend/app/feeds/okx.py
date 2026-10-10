@@ -65,17 +65,19 @@ class OkxSwapFeed(FeedConnector):
         """OKX uses a literal text 'ping' (not JSON) — base class sends JSON, so override."""
         await ws.send("ping")
 
-    async def fetch_klines(self, symbol: str, limit: int = 300) -> list[tuple]:
+    async def fetch_klines(self, symbol: str, limit: int = 300, timeframe: str = "1m") -> list[tuple]:
         """Backfill 1m OHLCV: /api/v5/market/candles bar=1m -> [(ts,o,h,l,c,vol)]."""
         url = f"{REST_BASE}/api/v5/market/candles"
         timeout = aiohttp.ClientTimeout(total=15)
         async with aiohttp.ClientSession(timeout=timeout) as sess:
             async with sess.get(
                 url,
-                params={"instId": symbol_to_inst(symbol), "bar": "1m", "limit": min(limit, 300)},
+                params={"instId": symbol_to_inst(symbol), "bar": {"1h":"1H", "4h":"4H", "1D":"1Dutc"}.get(timeframe, timeframe), "limit": min(limit, 300)},
             ) as resp:
                 resp.raise_for_status()
                 body = await resp.json()
+        if str(body.get("code", "0")) != "0":
+            raise ValueError("OKX history request rejected")
         out = []
         for r in body.get("data") or []:  # newest-first: [ts, o, h, l, c, vol, ...]
             try:

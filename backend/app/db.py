@@ -41,6 +41,16 @@ class WatchlistItem(Base):
     symbol: Mapped[str] = mapped_column(String(32), index=True)
 
 
+class ChartDrawing(Base):
+    """User-owned Focus drawings keyed by symbol."""
+    __tablename__ = "chart_drawings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    symbol: Mapped[str] = mapped_column(String(32), index=True)
+    drawings: Mapped[list] = mapped_column(JSON, default=list)
+    updated_at: Mapped[float] = mapped_column(Float, default=time.time, onupdate=time.time)
+
+
 class AlertLog(Base):
     __tablename__ = "alert_log"
 
@@ -60,6 +70,7 @@ class AlertRule(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     symbol: Mapped[str] = mapped_column(String(32), index=True)
+    instrument_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     rule_type: Mapped[str] = mapped_column(String(32))  # price_cross_above|price_cross_below|pct_move|volume_surge|score_above
     threshold: Mapped[float] = mapped_column(Float)
     window_s: Mapped[int] = mapped_column(Integer, default=60)     # for pct_move
@@ -147,6 +158,12 @@ async def init_db(database_url: str) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         if database_url.startswith("sqlite"):
+            # create_all does not alter existing tables; keep Render's
+            # persistent SQLite database compatible with the new field.
+            columns = {row[1] for row in (await conn.execute(text("PRAGMA table_info(alert_rules)"))).all()}
+            if "instrument_id" not in columns:
+                await conn.execute(text("ALTER TABLE alert_rules ADD COLUMN instrument_id VARCHAR(128)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_alert_rules_instrument_id ON alert_rules (instrument_id)"))
             await conn.execute(text("PRAGMA journal_mode=WAL"))
     log.info("database ready (%s)", database_url.split("://")[0])
 
