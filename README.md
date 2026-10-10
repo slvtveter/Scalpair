@@ -91,7 +91,10 @@ cooldown, Telegram при настроенном токене), доска гр�
 | `GET /api/v1/screeners/densities` | active walls across markets (+distance %) |
 | `GET /api/v1/screeners/ai-picks` | top setups by Scalp Score + thesis |
 | `GET /api/v1/screeners/overview` | full terminal table payload |
-| `GET /api/v1/alerts` | recent ≥85-score alert log |
+| `GET /api/v1/screeners/score-alerts` | recent auto score≥85 alert log |
+| `GET/POST/DELETE /api/v1/alerts` | user alert rules CRUD (Bearer; cooldown ≥30s) |
+| `GET /api/v1/notifications` | in-app inbox with delivery statuses |
+| `GET /api/v1/markets/{sym}/candles` | 1m OHLCV + walls + pivot cascade levels |
 | `WS /api/v1/ws/live-feed` | unified throttled stream (≤6 updates/s per client) |
 | `POST /api/v1/auth/register` / `login`, `GET /me` | JWT + subscription-tier scaffolding |
 

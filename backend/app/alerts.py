@@ -74,7 +74,7 @@ class AlertEngine:
                 fired, observed = self._check(rule, price)
                 if not fired:
                     # keep the anchor updated for edge detection
-                    if rule.rule_type in ("price_cross_above", "price_cross_below", "pct_move") and price is not None:
+                    if rule.rule_type in ("price_cross_above", "price_cross_below") and price is not None:
                         rule.last_value = price
                     continue
                 event_id = uuid.uuid4().hex
@@ -116,11 +116,20 @@ class AlertEngine:
             if rule.rule_type == "price_cross_below":
                 fired = prev is not None and prev >= rule.threshold > price
                 return fired, price
-            # pct_move over window: anchor = last_value captured each cycle
-            if prev:
-                moved = abs(price / prev - 1) * 100.0
-                return moved >= rule.threshold, moved
-            return False, None
+            # pct_move over the configured window: anchor = price window_s ago
+            sym_state = self.state.symbols.get(rule.symbol.upper())
+            hist = list(sym_state.price_history) if sym_state else []
+            target_ms = time.time() * 1000 - rule.window_s * 1000
+            base = None
+            for ts, p in hist:
+                if ts / 1000 <= target_ms:
+                    base = p
+                else:
+                    break
+            if base is None or base <= 0:
+                return False, None
+            moved = abs(price / base - 1) * 100.0
+            return moved >= rule.threshold, moved
         if rule.rule_type == "volume_surge":
             sym = self.state.symbols.get(rule.symbol.upper())
             surge = sym.metrics.surge_closed if sym else None

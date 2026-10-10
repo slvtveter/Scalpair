@@ -112,7 +112,7 @@ async def overview(request: Request) -> JSONResponse:
     return JSONResponse({"ts": int(time.time() * 1000), "symbols": streamer.build_snapshot()["symbols"]})
 
 
-@router.get("/alerts")
+@router.get("/screeners/score-alerts")
 async def recent_alerts(request: Request) -> JSONResponse:
     streamer = request.app.state.streamer
     return JSONResponse({"ts": int(time.time() * 1000), "alerts": streamer.alerts[-25:]})

@@ -32,7 +32,7 @@ class RuleIn(BaseModel):
     rule_type: Literal["price_cross_above", "price_cross_below", "pct_move", "volume_surge", "score_above"]
     threshold: float = Field(gt=0)
     window_s: int = Field(default=60, ge=10, le=3600)
-    cooldown_s: int = Field(default=300, ge=0, le=86400)
+    cooldown_s: int = Field(default=300, ge=30, le=86400)
     recurring: bool = True
 
 

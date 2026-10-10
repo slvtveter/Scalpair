@@ -99,11 +99,17 @@ def build_cascades(
     # keep the stronger (more touches), drop the weaker.
     kept: list[Cascade] = []
     for z in sorted(zones, key=lambda z: z.touches, reverse=True):
-        if any(
-            z.kind != k and z.low <= o.high and o.low <= z.high
-            for k, o in ((x.kind, x) for x in kept)
-            if k != z.kind
-        ):
+        conflict = False
+        for k, o in ((x.kind, x) for x in kept):
+            if k == z.kind:
+                continue
+            overlap = min(z.high, o.high) - max(z.low, o.low)
+            smaller = min(z.high - z.low, o.high - o.low)
+            # drop the weaker zone only when mostly swallowed by the opposite one
+            if overlap > 0 and overlap / smaller > 0.6:
+                conflict = True
+                break
+        if conflict:
             continue
         kept.append(z)
     return sorted(kept, key=lambda z: z.touches, reverse=True)

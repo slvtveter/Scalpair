@@ -17,9 +17,9 @@ const STALE_BOOK_MS = 15000;
 const I18N = {
   ru: {
     scanner: "Сканер", hotlist: "AI Подборка", radar: "Радар плотностей", alerts: "Алерты",
-    ticker: "Тикер", price: "Цена", trend: "Тренд", ch5m: "5м %", natr: "NATR", speed: "Скор.",
+    ticker: "Тикер", price: "Цена", trend: "Тренд", ch5m: "5м %", natr: "NATR", speed: "Скорость",
     vol1m: "Объём 1м", surge: "Всплеск", imb: "Стакан", wall: "Стена", dist: "Дист.",
-    fund: "Фанд.", level: "Уровень", score: "Скор", setup: "Сетап",
+    fund: "Фанд.", level: "Уровень", score: "AI Скор", setup: "Сетап",
     waiting: "ожидание данных…", noMatch: "нет монет под фильтр", warmup: "движок считает…",
     noSetups: "нет сетапов ≥ {n}", noAlerts: "алертов ещё нет", notifEmpty: "уведомлений нет",
     signIn: "Войти", signUp: "Регистрация", email: "email", password: "пароль",
@@ -29,6 +29,8 @@ const I18N = {
     priceCrossAbove: "цена выше", priceCrossBelow: "цена ниже", pctMove: "движение %",
     volumeSurge: "всплеск объёма", scoreAbove: "скоринг ≥",
     loginError: "Ошибка входа/регистрации", searchPh: "Поиск…",
+    close: "Закрыть", soundOn: "Звук вкл", soundOff: "Звук выкл",
+    thresholdNeeded: "укажите порог", logout: "Выйти",
     resistance: "сопротивление", support: "поддержка", inside: "внутри зоны",
   },
   en: {
@@ -45,6 +47,8 @@ const I18N = {
     priceCrossAbove: "price above", priceCrossBelow: "price below", pctMove: "move %",
     volumeSurge: "volume surge", scoreAbove: "score ≥",
     loginError: "Login/registration failed", searchPh: "Search…",
+    close: "Close", soundOn: "Sound on", soundOff: "Sound off",
+    thresholdNeeded: "set a threshold", logout: "Log out",
     resistance: "resistance", support: "support", inside: "inside zone",
   },
 };
@@ -103,7 +107,11 @@ function setBadge(status) {
 function connect() {
   setBadge(wsAttempt === 0 ? "connecting" : "reconnecting");
   try { ws = new WebSocket(WS_PATH); } catch { scheduleReconnect(); return; }
-  ws.onopen = () => { wsAttempt = 0; setBadge("live"); ws.send(JSON.stringify({ type: "hello" })); };
+  ws.onopen = () => {
+    wsAttempt = 0;
+    setBadge("live");
+    ws.send(JSON.stringify({ type: "hello", token: S.jwt || undefined }));
+  };
   ws.onmessage = (ev) => { S.msgTimes.push(performance.now()); try { onSnapshot(JSON.parse(ev.data)); } catch {} };
   ws.onclose = () => scheduleReconnect();
   ws.onerror = () => { try { ws.close(); } catch {} };
@@ -147,7 +155,7 @@ function checkAlerts() {
     if (Date.now() - last < 5 * 60 * 1000) continue;
     S.lastAlertAt.set(r.symbol, Date.now());
     ping();
-    toast(`⚡ ${r.symbol} — ${r.tag} (${r.score.toFixed(0)})`);
+    toast(`${r.symbol} — ${r.tag} (${r.score.toFixed(0)})`);
   }
 }
 
@@ -291,7 +299,7 @@ function renderTable() {
     const imbW = Math.min(Math.abs(imb) * 50, 50);
     const sc = scoreClass(r.score);
     const star = S.watch.has(r.symbol) ? "★" : "☆";
-    const staleChip = isStale(r) ? ` <span class="tile-stale">⚠ ${t("stale")}</span>` : "";
+    const staleChip = isStale(r) ? ` <span class="tile-stale">${t("stale")}</span>` : "";
     const cells = [
       `<td class="col-sym sym-cell"><span class="star" data-star="${esc(r.symbol)}" title="watchlist">${star}</span> ${esc(r.symbol)}<small>${r.tps != null ? `${r.tps.toFixed(1)} tps` : ""}${staleChip}</small></td>`,
       `<td class="mono">${fmtPrice(r.price)}</td>`,
@@ -557,7 +565,7 @@ function paintMini(cv, candles, livePrice) {
 }
 
 function boardPages() {
-  const rows = S.symbols.filter((r) => !S.hidden.has(r.symbol) && (r.score ?? 0) >= S.minScore);
+  const rows = visibleRows(); // same filters as the table: search, watch-only, score, hidden
   const per = S.gridSize * S.gridSize;
   const pages = Math.max(1, Math.ceil(rows.length / per));
   S.page = Math.min(S.page, pages - 1);
@@ -589,11 +597,16 @@ function renderBoard() {
   for (const tile of grid.querySelectorAll(".board-tile")) {
     const sym = tile.dataset.sym;
     const r = S.bySym.get(sym);
-    if (r && isStale(r) && !tile.querySelector(".tile-stale")) {
-      const chip = document.createElement("span");
-      chip.className = "tile-stale";
-      chip.textContent = `⚠ ${t("stale")}`;
-      tile.appendChild(chip);
+    const chip = tile.querySelector(".tile-stale");
+    if (r && isStale(r)) {
+      if (!chip) {
+        const el = document.createElement("span");
+        el.className = "tile-stale";
+        el.textContent = t("stale");
+        tile.appendChild(el);
+      }
+    } else if (chip) {
+      chip.remove();
     }
     getCandles(sym).then((candles) => {
       if (!candles.length) return;
@@ -912,7 +925,7 @@ async function pollNotifications() {
     const body = await res.json();
     const fresh = body.notifications.filter((n) => n.id > S.notifLastId);
     if (fresh.length) {
-      for (const n of fresh.slice(0, 3)) toast(`🔔 ${n.message}`, "warn");
+      for (const n of fresh.slice(0, 3)) toast(n.message, "warn");
       S.notifLastId = Math.max(...body.notifications.map((n) => n.id));
       LS.set("notifLastId", S.notifLastId);
     }
@@ -1019,7 +1032,7 @@ $("sound-toggle").addEventListener("click", (e) => {
   S.soundOn = !S.soundOn;
   LS.set("sound", S.soundOn);
   e.target.classList.toggle("on", S.soundOn);
-  e.target.textContent = S.soundOn ? "Sound on" : "Sound off";
+  e.target.textContent = S.soundOn ? t("soundOn") : t("soundOff");
   if (S.soundOn) ping();
 });
 $("lang-toggle").textContent = S.lang === "ru" ? "RU" : "EN";
@@ -1070,6 +1083,7 @@ function applyI18n() {
   $("h2-alerts").textContent = t("alerts");
   $("search").placeholder = t("searchPh");
   $("table-empty").textContent = S.symbols.length ? t("noMatch") : t("waiting");
+  $("view-toggle").textContent = S.view === "board" ? t("table") : t("board");
   $("board-empty").textContent = t("waiting");
   $("chart-close").textContent = t("close");
   $("sound-toggle").textContent = S.soundOn ? t("soundOn") : t("soundOff");
@@ -1086,7 +1100,7 @@ function applyI18n() {
 // ------------------------- boot -------------------------
 $("min-score").value = String(S.minScore);
 $("sound-toggle").classList.toggle("on", S.soundOn);
-$("sound-toggle").textContent = S.soundOn ? "Sound on" : "Sound off";
+$("sound-toggle").textContent = S.soundOn ? t("soundOn") : t("soundOff");
 $("grid-size").value = String(S.gridSize);
 
 renderTicker();

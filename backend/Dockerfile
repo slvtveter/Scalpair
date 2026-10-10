@@ -45,4 +45,4 @@ HEALTHCHECK --interval=20s --timeout=5s --start-period=25s --retries=4 \
     CMD curl -sf http://localhost:8000/api/v1/health || exit 1
 
 # single worker: the in-memory market state is process-local by design
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--log-level", "info"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*", "--log-level", "info"]
