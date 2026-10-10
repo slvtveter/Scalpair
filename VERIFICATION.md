@@ -244,3 +244,10 @@ syntax/static-server checks did not establish functional or visual acceptance.
 ## Render route check
 
 - Read-only check on 2026-10-10: the live backend health endpoint returned 200 and reported Bybit active; the live frontend root returned 200, while `/en` returned 404. Added Render Blueprint rewrites for `/en` and `/en/*`; this requires a Render redeploy to verify live.
+
+
+## Live Render deployment
+
+- Pushed commits `cb002df`, `c49f78e`, `a1744f2` and `9f6a59b` to `origin/main`.
+- After the final static entry fallback, live checks returned HTTP 200 for both `https://scalpair-frontend.onrender.com/` and `/en`; backend health returned HTTP 200.
+- The live backend currently reports Bybit active and zero ingested messages at the instant of the check, so market freshness still requires a later runtime check after cold-start warmup.
