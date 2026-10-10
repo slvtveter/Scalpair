@@ -15,7 +15,7 @@ import time
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app.api.auth import User, current_user
 from app.instruments import venue_for_feed
@@ -65,6 +65,42 @@ async def health(request: Request) -> HealthReport:
         feed_mode=state.feed_mode,
         feed_stats=feed_stats,
     )
+
+
+@router.get("/ready")
+async def ready(request: Request) -> JSONResponse:
+    """Process readiness, separate from upstream market freshness."""
+    streamer = request.app.state.streamer
+    if streamer is None or not streamer.top_symbols:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "market streamer is not initialized")
+    return JSONResponse(
+        {
+            "ready": True,
+            "feed": request.app.state.market_state.feed_mode,
+            "tracked_symbols": len(streamer.top_symbols),
+            "market_status": "degraded" if streamer.feed_degraded else "live",
+        }
+    )
+
+
+@router.get("/metrics", response_class=PlainTextResponse)
+async def metrics(request: Request) -> PlainTextResponse:
+    """Small Prometheus-compatible surface for Render/ops monitoring."""
+    state = request.app.state.market_state
+    streamer = request.app.state.streamer
+    feed = streamer.feed if streamer else None
+    stats = feed.stats if feed else None
+    values = {
+        "scalpair_messages_ingested_total": state.messages_ingested,
+        "scalpair_tracked_symbols": len(streamer.top_symbols) if streamer else 0,
+        "scalpair_active_ws_clients": request.app.state.broadcaster.client_count,
+        "scalpair_feed_degraded": int(bool(streamer and streamer.feed_degraded)),
+        "scalpair_feed_messages_total": stats.messages if stats else 0,
+        "scalpair_feed_reconnects_total": stats.reconnects if stats else 0,
+        "scalpair_feed_errors_total": stats.errors if stats else 0,
+    }
+    body = "\n".join(f"{name} {value}" for name, value in values.items()) + "\n"
+    return PlainTextResponse(body, media_type="text/plain; version=0.0.4")
 
 
 # ---------------------------------------------------------------------------
@@ -155,6 +191,47 @@ async def symbols(request: Request) -> JSONResponse:
             ],
         }
     )
+
+
+@router.get("/instruments")
+async def instruments(
+    request: Request,
+    q: str | None = Query(default=None, max_length=64),
+    exchange: str | None = Query(default=None, max_length=16),
+    market: str | None = Query(default=None, max_length=16),
+) -> JSONResponse:
+    """Unified instrument catalog contract used by search clients."""
+    streamer = request.app.state.streamer
+    feed_name = streamer.feed.name if streamer.feed else ""
+    venue = venue_for_feed(feed_name)
+    query = q.strip().upper() if q else ""
+    exchange_filter = exchange.strip().upper() if exchange else ""
+    market_filter = market.strip().upper() if market else ""
+    rows = []
+    for symbol in streamer.top_symbols:
+        st = request.app.state.market_state.symbols.get(symbol)
+        if st is None:
+            continue
+        if query and query not in symbol.upper():
+            continue
+        if exchange_filter and exchange_filter not in venue:
+            continue
+        if market_filter and market_filter != "FUTURES":
+            continue
+        rows.append(
+            {
+                "asset_id": symbol.removesuffix("USDT").lower(),
+                "symbol": symbol,
+                "instrument_id": f"{venue}:FUTURES:{symbol}",
+                "venue": venue,
+                "exchange": venue.split("-", 1)[0],
+                "market": "FUTURES",
+                "quote": "USDT",
+                "price": st.price,
+                "quote_volume_24h": st.quote_volume_24h,
+            }
+        )
+    return JSONResponse({"feed": request.app.state.market_state.feed_mode, "instruments": rows})
 
 
 @router.get("/markets/{symbol}/candles")
