@@ -40,6 +40,11 @@ class BinanceFuturesFeed(FeedConnector):
     async def fetch_universe(self, n: int) -> list[dict[str, Any]]:
         url = f"{REST_BASE}/fapi/v1/ticker/24hr"
         timeout = aiohttp.ClientTimeout(total=15)
+        coin_syms: set[str] = set()
+        try:
+            coin_syms = await self._coin_symbols()
+        except Exception:  # noqa: BLE001 — denylist fallback if exchangeInfo fails
+            log.warning("exchangeInfo fetch failed; using denylist only")
         async with aiohttp.ClientSession(timeout=timeout) as sess:
             async with sess.get(url) as resp:
                 resp.raise_for_status()
@@ -51,6 +56,8 @@ class BinanceFuturesFeed(FeedConnector):
                 continue  # USDT-margined only, skip e.g. BTCUSDT_250627
             if sym in NON_CRYPTO_SYMBOLS:
                 continue
+            if coin_syms and sym not in coin_syms:
+                continue  # tokenized stock/commodity (asset-class filter)
             try:
                 tickers.append(
                     {
@@ -65,6 +72,24 @@ class BinanceFuturesFeed(FeedConnector):
         tickers = [t for t in tickers if t["quote_volume_24h"] >= MIN_QUOTE_VOLUME_24H]
         tickers.sort(key=lambda t: t["quote_volume_24h"], reverse=True)
         return tickers[:n]
+
+    async def _coin_symbols(self) -> set[str]:
+        """Asset-class filter from exchangeInfo: only underlyingType == COIN.
+
+        Excludes tokenized stocks/commodities (MU, CCL, XAU...) at the class
+        level instead of a manual denylist.
+        """
+        url = f"{REST_BASE}/fapi/v1/exchangeInfo"
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as sess:
+            async with sess.get(url) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+        return {
+            s["symbol"]
+            for s in data.get("symbols", [])
+            if s.get("underlyingType") == "COIN" and s.get("quoteAsset") == "USDT"
+        }
 
     async def fetch_klines(self, symbol: str, limit: int = 300) -> list[tuple]:
         """Backfill 1m OHLCV via public REST: [(open_ms, o, h, l, c, v)]."""

@@ -321,7 +321,8 @@ class MarketStreamer:
                 if "funding_rate" in meta:
                     st.funding_rate = float(meta["funding_rate"])
                 if "open_interest" in meta:
-                    st.open_interest_usd = float(meta["open_interest"])
+                    # raw OI is base units - convert with the live price
+                    st.open_interest_usd = float(meta["open_interest"]) * (st.price or 0.0)
 
             from app.feeds.bybit import BybitLinearFeed
 

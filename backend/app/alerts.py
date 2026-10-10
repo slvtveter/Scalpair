@@ -122,7 +122,7 @@ class AlertEngine:
             target_ms = time.time() * 1000 - rule.window_s * 1000
             base = None
             for ts, p in hist:
-                if ts / 1000 <= target_ms:
+                if ts <= target_ms:  # ts is already ms (state stores ms)
                     base = p
                 else:
                     break

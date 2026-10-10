@@ -923,11 +923,13 @@ async function pollNotifications() {
     const res = await api("/api/v1/notifications");
     if (!res.ok) return;
     const body = await res.json();
-    const fresh = body.notifications.filter((n) => n.id > S.notifLastId);
+    // toasts fire for genuinely new items; the unread badge only clears when
+    // the bell panel is opened (notifLastId is updated there, not here)
+    S._toastedId = S._toastedId ?? S.notifLastId;
+    const fresh = body.notifications.filter((n) => n.id > S._toastedId);
     if (fresh.length) {
       for (const n of fresh.slice(0, 3)) toast(n.message, "warn");
-      S.notifLastId = Math.max(...body.notifications.map((n) => n.id));
-      LS.set("notifLastId", S.notifLastId);
+      S._toastedId = Math.max(...body.notifications.map((n) => n.id));
     }
     renderNotifPanel(body.notifications);
   } catch {}
@@ -988,6 +990,7 @@ async function authFlow(path) {
       S.jwt = body.access_token;
       LS.set("jwt", S.jwt);
       toast("✓ " + t("signIn"));
+      if (ws) ws.close();  // reconnect carries the token → pro tier immediately
       pollNotifications();
     } else {
       toast("✓ " + t("signUp"));
