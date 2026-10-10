@@ -76,7 +76,15 @@ aggressive-flow z-score, 5m momentum, funding bps) fused into a **Scalp Alpha Sc
 - Human-readable tags: `Breakout Imminent`, `Absorption at Support`,
   `Orderbook Wall Squeeze`, `Volume Ignition`, `Funding Squeeze`, …
 
-### Engine C — API (`backend/app/api/routes.py`)
+### Engine C — API (`backend/app/api/`)
+`ARCHITECTURE.md` / `API.md` / `INDICATORS.md` / `DATABASE.md` / `RUNBOOK.md` / `TEST_PLAN.md` — полный комплект.
+
+**Интеллектуальная часть:** NATR (Wilder ATR-14), скорость цены %/мин, range 5м, всплеск закрытой свечи,
+pivot-каскады (подтверждённые свинги k=3, зоны из ≥2 касаний, дистанция до уровня), серверные алерты
+(пересечение цены / %движение / всплеск / скоринг — срабатывают при закрытом браузере, edge-семантика,
+cooldown, Telegram при настроенном токене), доска графиков 1×1–4×4, watchlist/поиск, RU/EN.
+
+| Endpoint | Description |
 | Endpoint | Purpose |
 |---|---|
 | `GET /api/v1/health` | feed status, latency, ingest counters, WS clients |
@@ -104,7 +112,7 @@ webhooks, exports and private API access slot in behind the same auth layer.
 ```bash
 cd backend
 python3 -m venv .venv && ./.venv/bin/pip install -r requirements-dev.txt
-./.venv/bin/python -m pytest              # 58 tests: analytics, ML, feeds, API/E2E
+./.venv/bin/python -m pytest              # 85 tests: analytics, indicators, levels, ML, feeds, alerts, API/E2E
 ./.venv/bin/uvicorn app.main:app --reload # serves the UI at :8000 too
 ```
 

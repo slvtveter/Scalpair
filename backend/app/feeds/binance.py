@@ -23,6 +23,14 @@ log = logging.getLogger("scalpair.feed.binance")
 REST_BASE = "https://fapi.binance.com"
 WS_URL = "wss://fstream.binance.com/stream"
 
+# tokenized stocks/commodities pollute a scalping universe (review finding):
+# exclude explicitly plus a 24h liquidity floor.
+NON_CRYPTO_SYMBOLS = {
+    "XAUUSDT", "XAGUSDT", "SOXLUSDT", "SPCXUSDT", "KORUUSDT", "USUSDT", "BZUSDT",
+    "CLUSDT", "NGUSDT", "SNDKUSDT", "GIGAUSDT", "SOLVUSDT", "BIDUSDT", "ZROUSDT",
+}
+MIN_QUOTE_VOLUME_24H = 20_000_000.0
+
 
 class BinanceFuturesFeed(FeedConnector):
     name = "binance"
@@ -41,6 +49,8 @@ class BinanceFuturesFeed(FeedConnector):
             sym = row.get("symbol", "")
             if not sym.endswith("USDT") or "_" in sym:
                 continue  # USDT-margined only, skip e.g. BTCUSDT_250627
+            if sym in NON_CRYPTO_SYMBOLS:
+                continue
             try:
                 tickers.append(
                     {
@@ -52,6 +62,7 @@ class BinanceFuturesFeed(FeedConnector):
                 )
             except (KeyError, ValueError, TypeError):
                 continue
+        tickers = [t for t in tickers if t["quote_volume_24h"] >= MIN_QUOTE_VOLUME_24H]
         tickers.sort(key=lambda t: t["quote_volume_24h"], reverse=True)
         return tickers[:n]
 

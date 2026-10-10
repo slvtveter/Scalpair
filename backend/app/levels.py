@@ -94,7 +94,19 @@ def build_cascades(
                 cluster = [p]
         if cluster:
             zones.append(_make_zone(zkind, cluster))
-    return [z for z in zones if z.touches >= min_touches]
+    zones = [z for z in zones if z.touches >= min_touches]
+    # resolve S/R conflicts: overlapping opposite-kind zones contradict each other;
+    # keep the stronger (more touches), drop the weaker.
+    kept: list[Cascade] = []
+    for z in sorted(zones, key=lambda z: z.touches, reverse=True):
+        if any(
+            z.kind != k and z.low <= o.high and o.low <= z.high
+            for k, o in ((x.kind, x) for x in kept)
+            if k != z.kind
+        ):
+            continue
+        kept.append(z)
+    return sorted(kept, key=lambda z: z.touches, reverse=True)
 
 
 def _make_zone(zkind: str, cluster: list[Pivot]) -> Cascade:

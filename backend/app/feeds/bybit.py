@@ -11,6 +11,7 @@ Docs: https://bybit-exchange.github.io/docs/v5/websocket/public/orderbook
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import json
 import logging
@@ -38,7 +39,8 @@ class BybitLinearFeed(FeedConnector):
         self._books: dict[str, dict[str, dict[float, float]]] = {}
         # last known ticker values for delta-frame merging
         self._ticker_cache: dict[str, tuple[float, float, float]] = {}
-        self._book_seq: dict[str, int] = {}  # last atomic sequence per symbol
+        self._book_u: dict[str, int] = {}  # last update id per symbol
+        self._resync_pending: set[str] = set()  # symbols awaiting a fresh snapshot
 
     # ------------------------------------------------------------------
     async def fetch_universe(self, n: int) -> list[dict[str, Any]]:
@@ -141,28 +143,49 @@ class BybitLinearFeed(FeedConnector):
                     book["asks"][pf] = qf
         except (ValueError, TypeError):
             return
-        # sequence validation (spec: gap => resync). Bybit atomic `seq` must be +1.
-        seq = data.get("seq")
-        if seq is not None:
+        # Update-id continuity (spec: gap => data untrusted until snapshot resync).
+        # Per-symbol `u`: snapshot carries the last update id, each delta must be
+        # exactly prev_u + 1. (`seq` is connection-global and NOT per-symbol —
+        # the earlier per-symbol seq check caused a false-positive resync storm.)
+        u = data.get("u")
+        if u is not None:
             try:
-                seq = int(seq)
-                if mtype == "delta" and sym in self._book_seq and seq != self._book_seq[sym] + 1:
-                    log.warning(
-                        "orderbook seq gap for %s (%d -> %d) — clearing local book, requesting snapshot",
-                        sym, self._book_seq[sym], seq,
-                    )
-                    book["bids"] = {}
-                    book["asks"] = {}
-                    if self._ws is not None:
-                        with contextlib.suppress(Exception):
-                            await self._ws.send(json.dumps({"op": "subscribe", "args": [f"orderbook.50.{sym}"]}))
+                u = int(u)
             except (TypeError, ValueError):
-                pass
-            self._book_seq[sym] = seq if isinstance(seq, int) else self._book_seq.get(sym, 0)
+                u = None
+        if u is not None and mtype == "delta" and sym in self._book_u and u != self._book_u[sym] + 1:
+            log.warning(
+                "orderbook update-id gap for %s (%d -> %d) — book stale until snapshot",
+                sym, self._book_u[sym], u,
+            )
+            self._book_u.pop(sym, None)
+            book["bids"] = {}
+            book["asks"] = {}
+            if sym not in self._resync_pending:
+                self._resync_pending.add(sym)
+                asyncio.create_task(self._resync_book(sym))
+            return  # never push gapped/untrusted deltas downstream
+        if mtype == "snapshot" and sym in self._resync_pending:
+            self._resync_pending.discard(sym)
+        if u is not None:
+            self._book_u[sym] = u
 
         bids = sorted(book["bids"].items(), key=lambda x: x[0], reverse=True)[:25]
         asks = sorted(book["asks"].items(), key=lambda x: x[0])[:25]
         await self.callbacks.on_book(sym, bids, asks, float(ts or 0))
+
+    async def _resync_book(self, sym: str) -> None:
+        """Debounced unsubscribe+subscribe to force a fresh orderbook snapshot."""
+        await asyncio.sleep(1.5)
+        if self._stop.is_set() or self._ws is None:
+            return
+        try:
+            await self._ws.send(json.dumps({"op": "unsubscribe", "args": [f"orderbook.50.{sym}"]}))
+            await asyncio.sleep(0.3)
+            await self._ws.send(json.dumps({"op": "subscribe", "args": [f"orderbook.50.{sym}"]}))
+            log.info("orderbook resync requested for %s", sym)
+        except Exception:  # noqa: BLE001 — connection loss is handled by the reconnect loop
+            pass
 
     async def _on_public_trade(self, sym: str, data: Any) -> None:
         if not self._is_tracked(sym) or not isinstance(data, list):

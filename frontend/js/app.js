@@ -923,6 +923,11 @@ setInterval(pollNotifications, 8000);
 
 function renderNotifPanel(items) {
   const el = $("notif-panel");
+  if (items) S._notifItems = items;
+  const all = S._notifItems || [];
+  const unread = all.filter((n) => n.id > S.notifLastId).length;
+  $("bell-count").textContent = unread;
+  $("bell-count").classList.toggle("hidden", !unread);
   if (el.classList.contains("hidden")) return;
   if (!S.jwt) {
     el.innerHTML = `
@@ -938,12 +943,23 @@ function renderNotifPanel(items) {
     $("nl-register").onclick = () => authFlow("/api/v1/auth/register");
     return;
   }
-  el.innerHTML = items?.length
-    ? items.map((n) => `
+  el.innerHTML = all.length
+    ? all.map((n) => `
       <div class="notif-item"><b>${esc(n.symbol)}</b> ${esc(n.message)}
         <div class="delivery">${new Date(n.ts * 1000).toLocaleTimeString()} · ${esc(n.delivery.join(", "))}</div>
       </div>`).join("")
     : `<div class="notif-empty">${t("notifEmpty")}</div>`;
+  el.innerHTML += `<div class="notif-actions"><button id="nl-logout" class="ctl ctl-btn">${t("logout")}</button></div>`;
+  const lo = $("nl-logout");
+  if (lo) lo.onclick = () => {
+    S.jwt = null;
+    LS.set("jwt", null);
+    S.notifLastId = 0;
+    LS.set("notifLastId", 0);
+    S._notifItems = [];
+    renderNotifPanel([]);
+    if (ws) ws.close();  // reconnects honestly at the public tier
+  };
 }
 
 async function authFlow(path) {
@@ -970,8 +986,13 @@ async function authFlow(path) {
 $("bell").addEventListener("click", () => {
   const panel = $("notif-panel");
   panel.classList.toggle("hidden");
-  renderNotifPanel([]);
-  if (S.jwt) pollNotifications();
+  if (!panel.classList.contains("hidden") && S._notifItems?.length) {
+    S.notifLastId = Math.max(...S._notifItems.map((n) => n.id));
+    LS.set("notifLastId", S.notifLastId);
+    renderNotifPanel(S._notifItems);
+  } else {
+    renderNotifPanel([]);
+  }
 });
 document.addEventListener("click", (e) => {
   if (!e.target.closest("#notif-panel") && !e.target.closest("#bell")) $("notif-panel").classList.add("hidden");
@@ -986,7 +1007,7 @@ $("alert-create").addEventListener("click", async () => {
     cooldown_s: 300,
     recurring: true,
   };
-  if (!body.threshold || body.threshold <= 0) { toast("threshold?", "err"); return; }
+  if (!body.threshold || body.threshold <= 0) { toast(t("thresholdNeeded"), "err"); return; }
   const res = await api("/api/v1/alerts", { method: "POST", body: JSON.stringify(body) });
   toast(res.ok ? `✓ ${t("alertCreated")}` : `${res.status}`, res.ok ? "" : "err");
 });
@@ -1049,6 +1070,17 @@ function applyI18n() {
   $("h2-alerts").textContent = t("alerts");
   $("search").placeholder = t("searchPh");
   $("table-empty").textContent = S.symbols.length ? t("noMatch") : t("waiting");
+  $("board-empty").textContent = t("waiting");
+  $("chart-close").textContent = t("close");
+  $("sound-toggle").textContent = S.soundOn ? t("soundOn") : t("soundOff");
+  $("alert-create").textContent = t("createAlert");
+  $("alert-threshold").placeholder = S.lang === "ru" ? "порог" : "threshold";
+  const typeSel = $("alert-type");
+  const ruleKeys = ["priceCrossAbove", "priceCrossBelow", "pctMove", "volumeSurge", "scoreAbove"];
+  const ruleVals = ["price_cross_above", "price_cross_below", "pct_move", "volume_surge", "score_above"];
+  const prevSel = typeSel.value;
+  typeSel.innerHTML = ruleKeys.map((k, i) => `<option value="${ruleVals[i]}">${t(k)}</option>`).join("");
+  typeSel.value = prevSel;
 }
 
 // ------------------------- boot -------------------------

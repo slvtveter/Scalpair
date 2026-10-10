@@ -152,11 +152,20 @@ def heuristic_score(f: np.ndarray, sym: SymbolState, now_ms: float) -> tuple[flo
     return round(score, 1), tag, thesis
 
 
+def _fmt_wall(n: float) -> str:
+    if n >= 1e6:
+        return f"{n / 1e6:.1f}M"
+    if n >= 1e3:
+        return f"{n / 1e3:.0f}K"
+    return f"{n:.0f}"
+
+
 def _build_thesis(
     sym: SymbolState, now_ms: float, surge: float, imb: float, squeeze: float, z: float,
     proximity: float, asym: float, taker: float, mom: float, funding: float, tag: str,
 ) -> str:
     parts: list[str] = []
+    raw_funding_bp = sym.funding_rate * 10_000.0  # unclamped for honest display
     if surge >= 1.5:
         parts.append(f"1m volume {surge:.1f}x above 30m norm")
     if abs(imb) > 0.25:
@@ -169,14 +178,14 @@ def _build_thesis(
         eat = best.get("seconds_to_eat")
         eat_txt = f", ~{eat:.0f}s to eat" if eat else ""
         parts.append(
-            f"{best['notional_usd'] / 1e6:.1f}M {best['side']} wall {abs(best['distance_pct']):.2f}% away{eat_txt}"
+            f"{_fmt_wall(best['notional_usd'])} {best['side']} wall {abs(best['distance_pct']):.2f}% away{eat_txt}"
         )
     if abs(z) > 1.5:
         parts.append(f"aggressive {'buyers' if z > 0 else 'sellers'} {abs(z):.1f}σ vs norm")
     if abs(mom) > 0.8:
         parts.append(f"5m move {mom:+.2f}%")
-    if abs(funding) > 8.0:
-        parts.append(f"funding {funding:+.1f}bp")
+    if abs(raw_funding_bp) > 5.0:
+        parts.append(f"funding {raw_funding_bp:+.1f}bp")
     if not parts:
         parts.append("no dominant edge — monitor for ignition")
     return f"{tag}: " + "; ".join(parts[:4]) + "."
@@ -251,11 +260,14 @@ class AnomalyModel:
 class ScalpScorer:
     """Blends heuristic + anomaly into the final Scalp Alpha Score."""
 
+    SMOOTHING_ALPHA = 0.5  # EMA over ticks: kills ±30pts/min twitch without much lag
+
     def __init__(self, heuristic_weight: float = 0.65) -> None:
         self.heuristic_weight = _clip(heuristic_weight, 0.0, 1.0)
         self.anomaly = AnomalyModel()
         self.picks: dict[str, AiPick] = {}
         self.last_tick = 0.0
+        self._smoothed: dict[str, float] = {}
 
     def score_symbol(self, state: MarketState, symbol: str, now_ms: float | None = None) -> AiPick | None:
         sym = state.symbols.get(symbol)
@@ -266,11 +278,14 @@ class ScalpScorer:
         self.anomaly.observe(features)
         h_score, tag, thesis = heuristic_score(features, sym, now_ms)
         a_score = self.anomaly.anomaly_score(features)
-        final = _clip(
+        raw = _clip(
             self.heuristic_weight * h_score + (1.0 - self.heuristic_weight) * a_score * 0.9,
             0.0,
             100.0,
         )
+        prev = self._smoothed.get(symbol)
+        final = raw if prev is None else prev * (1 - self.SMOOTHING_ALPHA) + raw * self.SMOOTHING_ALPHA
+        self._smoothed[symbol] = final
         pick = AiPick(
             symbol=symbol,
             scalp_score=round(final, 1),
@@ -285,8 +300,15 @@ class ScalpScorer:
         return pick
 
     def top(self, n: int = 5, min_score: float = 0.0) -> list[AiPick]:
-        ranked = sorted(self.picks.values(), key=lambda p: p.scalp_score, reverse=True)
-        return [p for p in ranked if p.scalp_score >= min_score][:n]
+        return self._ranked(min_score)[:n]
 
     def all_picks(self) -> list[AiPick]:
-        return sorted(self.picks.values(), key=lambda p: p.scalp_score, reverse=True)
+        return self._ranked(0.0)
+
+    def _ranked(self, min_score: float) -> list[AiPick]:
+        # actionable setups rank above non-actionable Quiet-Watch at equal score
+        ranked = sorted(
+            self.picks.values(),
+            key=lambda p: (p.tag == "Quiet — Watch", -p.scalp_score),
+        )
+        return [p for p in ranked if p.scalp_score >= min_score]

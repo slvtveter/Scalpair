@@ -32,6 +32,8 @@
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
+.hidden { display: none !important; }
+
 html, body {
   background: var(--bg);
   color: var(--text);
@@ -208,7 +210,7 @@ body { display: flex; flex-direction: column; }
 }
 .term-table thead th.col-sym, .term-table thead th.col-tag,
 .term-table thead th.col-imb, .term-table thead th.col-trend { text-align: left; }
-.term-table thead th.hint-inline { text-transform: none; letter-spacing: 0; color: var(--text-3); opacity: 0.7; }
+.term-table thead th .hint-inline { text-transform: none; letter-spacing: 0; color: var(--text-3); opacity: 0.7; }
 .term-table thead th.th-sort-active { color: var(--accent); }
 .term-table thead th.th-sort-active::after { content: " ↓"; font-size: 9px; }
 .term-table td {
@@ -431,7 +433,7 @@ body { display: flex; flex-direction: column; }
 .tile-head .star.on { color: var(--warn); }
 .tile-canvas-wrap { flex: 1; min-height: 0; position: relative; }
 .tile-canvas-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.tile-stale { position: absolute; top: 4px; right: 6px; font-size: 9px; color: var(--warn); font-family: var(--font-mono); }
+.tile-stale { position: absolute; top: 4px; right: 6px; font-size: 9px; color: var(--warn); font-family: var(--font-mono); background: var(--panel); border: 1px solid var(--warn); border-radius: 3px; padding: 0 4px; }
 
 #view-toggle.active { color: var(--accent); border-color: var(--accent); }
 
