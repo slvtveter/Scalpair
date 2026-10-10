@@ -33,6 +33,7 @@ log = logging.getLogger("scalpair.streamer")
 METRICS_TICK_S = 0.25  # 4 Hz snapshot publish; WS_BROADCAST_RATE caps per-client delivery
 UNIVERSE_REFRESH_S = 60.0
 FEED_PROBE_TIMEOUT_S = 10.0
+REST_FALLBACK_INTERVAL_S = 10.0
 
 
 class MarketStreamer:
@@ -164,6 +165,7 @@ class MarketStreamer:
             asyncio.create_task(self._scoring_loop(), name="scoring-loop"),
             asyncio.create_task(self._universe_loop(), name="universe-loop"),
             asyncio.create_task(self._degradation_watch(), name="degradation-watch"),
+            asyncio.create_task(self._rest_fallback_loop(), name="rest-fallback"),
             asyncio.create_task(self._candle_backfill_task(), name="candle-backfill"),
             asyncio.create_task(self._levels_loop(), name="levels-loop"),
             asyncio.create_task(self._live_recovery_loop(), name="live-recovery"),
@@ -177,6 +179,50 @@ class MarketStreamer:
             missing = [s for s in self.top_symbols if s not in self._seeded_symbols]
             if missing:
                 await self._seed_candles()
+
+    async def _rest_fallback_loop(self) -> None:
+        """Keep real ticker values moving when a venue WS is unreachable.
+
+        Some hosted networks allow exchange REST but intermittently block or
+        reset public websocket connections. Ticker snapshots are useful for a
+        degraded screener, while L2/trade-derived fields remain explicitly
+        stale and the health state stays degraded.
+        """
+        last_book_events = self.book_events
+        last_trade_events = self.trade_events
+        while not self._stop.is_set():
+            await asyncio.sleep(REST_FALLBACK_INTERVAL_S)
+            feed, generation = self.feed, self._generation
+            if feed is None or isinstance(feed, MockFeed):
+                continue
+            if self.book_events != last_book_events or self.trade_events != last_trade_events:
+                last_book_events, last_trade_events = self.book_events, self.trade_events
+                continue
+            try:
+                tickers = await asyncio.wait_for(
+                    feed.fetch_universe(max(len(self.top_symbols), self.settings.top_symbols)),
+                    timeout=FEED_PROBE_TIMEOUT_S,
+                )
+            except Exception as exc:  # noqa: BLE001 — fallback must never stop the streamer
+                log.info("REST ticker fallback failed for %s: %s", feed.name, exc)
+                continue
+            if generation != self._generation or feed is not self.feed:
+                continue
+            tracked = set(self.top_symbols)
+            for ticker in tickers:
+                symbol = ticker.get("symbol")
+                if symbol not in tracked:
+                    continue
+                st = self.state.get(symbol)
+                st.on_ticker_24h(
+                    float(ticker.get("last_price") or 0.0),
+                    float(ticker.get("price_change_pct_24h") or 0.0),
+                    float(ticker.get("quote_volume_24h") or 0.0),
+                )
+                self.state.record_ingest()
+            if tickers:
+                self.feed_degraded = True
+                self.publish(self.build_snapshot())
 
     # ------------------------------------------------------------------
     # Live recovery (spec: upstream recovery). If boot fell back to the
