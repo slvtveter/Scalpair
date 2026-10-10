@@ -359,10 +359,10 @@ class MarketStreamer:
                 return
             books = self.book_events - previous_books
             trades = self.trade_events - previous_trades
-            self.feed_degraded = books > 50 and trades == 0
+            self.feed_degraded = (books == 0 and trades == 0) or (books > 50 and trades == 0)
             previous_books, previous_trades = self.book_events, self.trade_events
             if self.feed_degraded:
-                log.warning("source %s has books but no trades; keeping sources isolated", self.feed.name)
+                log.warning("source %s is silent or has books without trades; keeping sources isolated", self.feed.name)
             self.publish(self.build_snapshot())
 
     async def _metrics_loop(self) -> None:
