@@ -1,14 +1,12 @@
 /* ============================================================
-   SCALPAIR TERMINAL — vanilla JS, no build step
-   Слева: топ-сетапы + сканер · Справа: доска графиков
-   Интерактивный свечной график · серверные алерты · RU/EN
+   SCALPAIR v0.5 — Scalpboard-style layout
+   Center: live chart board 3×3 · Right: coin list · Toolbar: scalper tools
    ============================================================ */
 "use strict";
 
 const $ = (id) => document.getElementById(id);
 
-// Same-origin by default (docker/nginx); on Render the static site talks to
-// the backend service cross-origin (CORS configured on the backend).
+// Same-origin (docker/nginx) or cross-origin on Render (static → backend)
 const API_BASE = window.SCALPAIR_API_BASE ||
   (location.hostname.endsWith("onrender.com") && !location.hostname.startsWith("scalpair-backend")
     ? "https://scalpair-backend.onrender.com"
@@ -16,6 +14,7 @@ const API_BASE = window.SCALPAIR_API_BASE ||
 const WS_PATH = API_BASE
   ? `${API_BASE.replace(/^http/, "ws")}/api/v1/ws/live-feed`
   : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/v1/ws/live-feed`;
+
 const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
 const STALE_BOOK_MS = 15000;
@@ -23,42 +22,36 @@ const STALE_BOOK_MS = 15000;
 // ------------------------- i18n (RU default) -------------------------
 const I18N = {
   ru: {
-    scanner: "Сканер", board: "Доска", topsetups: "Топ сетапы", alerts: "Алерты",
-    ticker: "Тикер", price: "Цена", trend: "Тренд", ch5m: "5м %", surge: "Всплеск",
-    imb: "Стакан", level: "Уровень", setup: "Сетап",
+    coins: "Монеты", alerts: "Алерты",
+    ticker: "Тикер", price: "Цена", ch5m: "5м %", surge: "Вспл", vol: "Объём", score: "Скор",
     waiting: "ожидание данных…", noMatch: "нет монет под фильтр", warmup: "движок считает…",
-    noAlerts: "алертов ещё нет", notifEmpty: "уведомлений нет",
-    signIn: "Войти", signUp: "Регистрация", email: "email", password: "пароль",
-    createAlert: "Создать алерт", alertCreated: "Алертовое правило создано",
+    notifEmpty: "уведомлений нет", signIn: "Войти", signUp: "Регистрация",
+    email: "email", password: "пароль", loginError: "Ошибка входа/регистрации",
     authNeeded: "Войдите (Алерты), чтобы создавать правила",
-    table: "Таблица", stale: "stale",
+    createAlert: "Создать алерт", alertCreated: "Алертовое правило создано",
+    thresholdNeeded: "укажите порог", close: "Закрыть", logout: "Выйти",
     priceCrossAbove: "цена выше", priceCrossBelow: "цена ниже", pctMove: "движение %",
     volumeSurge: "всплеск объёма x", scoreAbove: "скоринг ≥",
-    loginError: "Ошибка входа/регистрации", searchPh: "Поиск…",
     resistance: "сопротивление", support: "поддержка", inside: "внутри зоны",
-    close: "Закрыть", soundOn: "Звук вкл", soundOff: "Звук выкл",
-    thresholdNeeded: "укажите порог", logout: "Выйти",
-    alertsBtn: "Алерты", feed: "Фид", soundLabel: "Звук (скор ≥ 85)", langLabel: "Язык / Language",
-    minScoreLabel: "Мин. скоринг", minWallLabel: "Мин. стена", tzLabel: "Часовой пояс", reconnecting: "переподключение", connecting: "подключение", symbolsCount: "симв.",
+    searchPh: "Поиск…", reconnecting: "переподключение", connecting: "подключение",
+    soundOn: "Звук вкл", soundOff: "Звук выкл", stale: "stale",
+    sortBy: "Сорт", tf: "ТФ", grid: "Сетка",
   },
   en: {
-    scanner: "Scanner", board: "Board", topsetups: "Top setups", alerts: "Alerts",
-    ticker: "Ticker", price: "Price", trend: "Trend", ch5m: "5m %", surge: "Surge",
-    imb: "Book Imb", level: "Level", setup: "Setup",
+    coins: "Coins", alerts: "Alerts",
+    ticker: "Ticker", price: "Price", ch5m: "5m %", surge: "Surge", vol: "Volume", score: "Score",
     waiting: "waiting for market data…", noMatch: "no symbols match filter", warmup: "scoring engine warming up…",
-    noAlerts: "no alerts fired yet", notifEmpty: "no notifications yet",
-    signIn: "Sign in", signUp: "Register", email: "email", password: "password",
-    createAlert: "Create alert", alertCreated: "Alert rule created",
+    notifEmpty: "no notifications yet", signIn: "Sign in", signUp: "Register",
+    email: "email", password: "password", loginError: "Login/registration failed",
     authNeeded: "Sign in (Alerts) to create rules",
-    table: "Table", stale: "stale",
+    createAlert: "Create alert", alertCreated: "Alert rule created",
+    thresholdNeeded: "set a threshold", close: "Close", logout: "Log out",
     priceCrossAbove: "price above", priceCrossBelow: "price below", pctMove: "move %",
     volumeSurge: "volume surge x", scoreAbove: "score ≥",
-    loginError: "Login/registration failed", searchPh: "Search…",
     resistance: "resistance", support: "support", inside: "inside zone",
-    close: "Close", soundOn: "Sound on", soundOff: "Sound off",
-    thresholdNeeded: "set a threshold", logout: "Log out",
-    alertsBtn: "Alerts", feed: "Feed", soundLabel: "Sound (score ≥ 85)", langLabel: "Language",
-    minScoreLabel: "Min score", minWallLabel: "Min wall", tzLabel: "Timezone", reconnecting: "reconnecting", connecting: "connecting", symbolsCount: "symbols",
+    searchPh: "Search…", reconnecting: "reconnecting", connecting: "connecting",
+    soundOn: "Sound on", soundOff: "Sound off", stale: "stale",
+    sortBy: "Sort", tf: "TF", grid: "Grid",
   },
 };
 const t = (k, vars) => {
@@ -77,7 +70,6 @@ const S = {
   symbols: [],
   bySym: new Map(),
   picks: [],
-  alerts: [],
   stats: {},
   feed: "—",
   priceHistory: new Map(),
@@ -85,31 +77,33 @@ const S = {
   soundOn: LS.get("sound", false),
   minScore: LS.get("minScore", 0),
   wallMin: LS.get("wallMin", 250000),
-  sortKey: "score",
-  msgTimes: [],
-  lastAlertAt: new Map(),
-  lang: LS.get("lang", "ru"),
+  sortKey: LS.get("sort", "score"),
+  boardTf: LS.get("boardTf", 5),
   gridSize: LS.get("grid", 3),
   page: 0,
   search: "",
   watch: new Set(LS.get("watch", [])),
   jwt: LS.get("jwt", null),
+  lang: LS.get("lang", "ru"),
   candleCache: new Map(),
   notifLastId: LS.get("notifLastId", 0),
   _toastedId: LS.get("notifLastId", 0),
   _notifItems: [],
+  msgTimes: [],
+  lastAlertAt: new Map(),
+  sideTab: "coins",
 };
 
-// ------------------------- ws client -------------------------
+// ------------------------- ws -------------------------
 let ws = null;
 let wsAttempt = 0;
 
 function setFeedStatus(status) {
   const b = $("feed-badge");
   if (status === "live") { b.textContent = `· ${S.feed.replace("-trades", "").toUpperCase()}`; b.style.color = "var(--up)"; }
-  else if (status === "reconnecting") { b.textContent = "· переподключение"; b.style.color = "var(--warn)"; }
+  else if (status === "reconnecting") { b.textContent = `· ${t("reconnecting")}`; b.style.color = "var(--warn)"; }
   else { b.textContent = `· ${t("connecting")}`; b.style.color = "var(--text-3)"; }
-  $("set-feed").textContent = S.feed !== "—" ? `${S.feed} · ${S.stats.tracked ?? 0} ${t("symbolsCount")}` : "—";
+  $("set-feed").textContent = S.feed !== "—" ? `${S.feed} · ${S.stats.tracked ?? 0}` : "—";
 }
 
 function connect() {
@@ -137,7 +131,6 @@ function onSnapshot(snap) {
   S.feed = snap.feed || S.feed;
   S.symbols = snap.symbols || [];
   S.picks = snap.picks || [];
-  S.alerts = snap.alerts || S.alerts;
   S.stats = snap.stats || {};
   for (const r of S.symbols) {
     if (r.price > 0) {
@@ -224,8 +217,6 @@ function tagClass(tag) {
   if (tag.includes("Volume") || tag.includes("Momentum") || tag.includes("Funding")) return "tag-volume";
   return "tag-quiet";
 }
-function isStale(r) { return r.bookTs && Date.now() - r.bookTs > STALE_BOOK_MS; }
-
 function scoreClass(score) {
   if (score == null) return "sc-ice";
   if (score >= 85) return "sc-blaze";
@@ -233,326 +224,28 @@ function scoreClass(score) {
   if (score >= 40) return "sc-warm";
   return "sc-ice";
 }
+function isStale(r) { return r.bookTs && Date.now() - r.bookTs > STALE_BOOK_MS; }
 
-// ------------------------- scanner table -------------------------
-const tbody = $("table-body");
-const rowMap = new Map();
-
-const TH_KEYS = ["symbol", "price", null, "change5m", "surge", null, "spread", "level", "tag"];
-
-function updateSortIndicator() {
-  document.querySelectorAll("#main-table thead th").forEach((th, i) => {
-    const active = TH_KEYS[i] === S.sortKey;
-    th.classList.toggle("th-sort-active", active);
-    if (active) th.setAttribute("aria-sort", "descending");
-    else th.removeAttribute("aria-sort");
-    th.style.cursor = TH_KEYS[i] ? "pointer" : "default";
-  });
-}
-
-function visibleRows() {
-  let rows = S.symbols.filter((r) => r.vol5m > 0 || r.tps > 0.1); // skip dead listings
+// ------------------------- sorting / filtering -------------------------
+function sortedRows() {
+  let rows = S.symbols;
   if (S.search) rows = rows.filter((r) => r.symbol.includes(S.search.toUpperCase()));
   rows = rows.filter((r) => (r.score ?? 0) >= S.minScore);
+  rows = rows.filter((r) => r.vol5m > 0 || r.tps > 0.1); // dead listings out
+  const key = S.sortKey;
   return [...rows].sort((a, b) => {
-    switch (S.sortKey) {
-      case "symbol": return a.symbol.localeCompare(b.symbol);
-      case "price": return (b.price ?? 0) - (a.price ?? 0);
-      case "change5m": return (b.change5m ?? 0) - (a.change5m ?? 0);
+    switch (key) {
       case "surge": return (b.surge ?? 0) - (a.surge ?? 0);
-      case "level": {
-        const av = a.levelDist, bv = b.levelDist;
-        return (av ?? Infinity) - (bv ?? Infinity);
-      }
+      case "vol1m": return (b.vol1m ?? 0) - (a.vol1m ?? 0);
+      case "speed": return (b.speed ?? -Infinity) - (a.speed ?? -Infinity);
+      case "change5m": return (b.change5m ?? 0) - (a.change5m ?? 0);
+      case "levelDist": return (a.levelDist ?? Infinity) - (b.levelDist ?? Infinity);
       default: return (b.score ?? -1) - (a.score ?? -1);
     }
   });
 }
 
-function renderTable() {
-  const rows = visibleRows();
-  $("table-empty").style.display = rows.length ? "none" : "";
-  $("table-empty").textContent = rows.length ? "" : (S.symbols.length ? t("noMatch") : t("waiting"));
-
-  const seen = new Set();
-  for (const r of rows) {
-    seen.add(r.symbol);
-    let tr = rowMap.get(r.symbol);
-    if (!tr) {
-      tr = document.createElement("tr");
-      tr.tabIndex = 0;
-      tr.setAttribute("role", "button");
-      tr.setAttribute("aria-label", `SCALP: ${r.symbol}`);
-      tr.onclick = () => openChart(r.symbol);
-      tr.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChart(r.symbol); } };
-      rowMap.set(r.symbol, tr);
-      tbody.appendChild(tr);
-    }
-    tr.className = (r.score ?? 0) >= 85 ? "row-hot" : "";
-
-    const imb = r.imbalance ?? 0;
-    const imbW = Math.min(Math.abs(imb) * 50, 50);
-    const star = S.watch.has(r.symbol) ? "★" : "☆";
-    const staleChip = isStale(r) ? ` <span class="tile-stale">${t("stale")}</span>` : "";
-    const levelTxt = r.levelDist != null
-      ? `${r.levelDist.toFixed(2)}% ${r.levelKind === "resistance" ? "↑" : r.levelKind === "support" ? "↓" : "◎"}`
-      : "—";
-    const cells = [
-      `<td class="col-sym sym-cell"><span class="star" data-star="${esc(r.symbol)}" title="watchlist">${star}</span> ${esc(r.symbol)}<small>${r.tps != null ? `${r.tps.toFixed(1)} tps` : ""}${staleChip}</small></td>`,
-      `<td class="mono">${fmtPrice(r.price)}</td>`,
-      `<td class="col-trend spark-cell"><canvas class="spark" width="110" height="26"></canvas></td>`,
-      `<td class="mono ${cls(r.change5m)}">${fmtPct(r.change5m)}</td>`,
-      `<td class="mono ${cls(r.surge - 1)}">${r.surge != null ? `${r.surge.toFixed(1)}x` : "—"}</td>`,
-      `<td class="col-imb"><span class="imb-val mono">${imb >= 0 ? "+" : ""}${imb.toFixed(2)}</span><div class="imb-meter"><div class="imb-fill ${imb >= 0 ? "bid" : "ask"}" style="width:${imbW}%"></div></div></td>`,
-      `<td class="mono ${r.spreadBps > 15 ? "down" : "dim"}">${r.spreadBps != null ? r.spreadBps.toFixed(1) : "—"}</td>`,
-      `<td class="mono ${r.levelDist === 0 ? "up" : "dim"}">${levelTxt}</td>`,
-      `<td class="col-tag"><span class="tag-cell ${tagClass(r.tag)}">${esc(r.tag ?? "—")}</span></td>`,
-    ];
-    if (tr._sig !== cells.join("|")) { tr.innerHTML = cells.join(""); tr._sig = cells.join("|"); }
-  }
-  for (const [sym, tr] of rowMap) {
-    if (!seen.has(sym)) { tr.remove(); rowMap.delete(sym); }
-  }
-}
-
-document.querySelectorAll("#main-table thead th").forEach((th, i) => {
-  th.addEventListener("click", () => { if (TH_KEYS[i]) { S.sortKey = TH_KEYS[i]; renderTable(); updateSortIndicator(); } });
-});
-tbody.addEventListener("click", (e) => {
-  const star = e.target.closest("[data-star]");
-  if (!star) return;
-  e.stopPropagation();
-  const sym = star.dataset.star;
-  if (S.watch.has(sym)) S.watch.delete(sym); else S.watch.add(sym);
-  LS.set("watch", [...S.watch]);
-  renderTable();
-});
-
-// ------------------------- trend sparklines -------------------------
-function drawSparks() {
-  for (const [sym, tr] of rowMap) {
-    const cv = tr.querySelector("canvas.spark");
-    if (!cv) continue;
-    const pts = S.priceHistory.get(sym) || [];
-    if (pts.length < 10) continue;
-    const ps = pts.slice(-600).map((p) => p.p);
-    const dpr = window.devicePixelRatio || 1;
-    const W = 110, H = 26;
-    if (cv.width !== Math.round(W * dpr)) {
-      cv.width = Math.round(W * dpr);
-      cv.height = Math.round(H * dpr);
-      cv.style.width = W + "px";
-      cv.style.height = H + "px";
-    }
-    const ctx = cv.getContext("2d");
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, W, H);
-    let min = Math.min(...ps), max = Math.max(...ps);
-    if (max - min < min * 0.0002) max = min + min * 0.0002;
-    const up = ps[ps.length - 1] >= ps[0];
-    const col = up ? "#31976b" : "#c95d63";
-    const x = (i) => (i / (ps.length - 1)) * (W - 4) + 2;
-    const y = (p) => H - 3 - ((p - min) / (max - min)) * (H - 6);
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, up ? "rgba(49,151,107,0.22)" : "rgba(201,93,99,0.22)");
-    grad.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.beginPath();
-    ps.forEach((p, i) => (i ? ctx.lineTo(x(i), y(p)) : ctx.moveTo(x(0), y(p))));
-    ctx.strokeStyle = col;
-    ctx.lineWidth = 1.3;
-    ctx.lineJoin = "round";
-    ctx.stroke();
-    ctx.lineTo(x(ps.length - 1), H); ctx.lineTo(x(0), H); ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
-    ctx.beginPath();
-    ctx.arc(x(ps.length - 1), y(ps[ps.length - 1]), 1.7, 0, Math.PI * 2);
-    ctx.fillStyle = col;
-    ctx.fill();
-  }
-}
-
-// ------------------------- top setups (slim strip) -------------------------
-let _topSig = "";
-function renderTopSetups() {
-  const el = $("topsetups-body");
-  const picks = S.picks.filter((p) => p.tag !== "Quiet — Watch" && p.score >= Math.max(S.minScore, 50));
-  if (!S.picks.length) { setIfChanged(el, `<div class="empty-note">${t("warmup")}</div>`); return; }
-  if (!picks.length) { setIfChanged(el, `<div class="empty-note">${t("noMatch")}</div>`); return; }
-  const html = picks.slice(0, 3).map((p) => {
-    const reason = (p.thesis || "").replace(/^[^:]+:\s*/, "").split(";")[0];
-    return `
-    <div class="ts-row" data-sym="${esc(p.symbol)}" tabindex="0" role="button" aria-label="SCALP: ${esc(p.symbol)}">
-      <span class="ts-sym">${esc(p.symbol)}</span>
-      <span class="mono tp">${fmtPrice(p.price)}</span>
-      <span class="mono ${cls(p.surge - 1)}">${p.surge != null ? `${p.surge.toFixed(1)}x` : ""}</span>
-      <span class="tag-cell ${tagClass(p.tag)}">${esc(p.tag)}</span>
-      <span class="ts-reason">${esc(reason)}</span>
-      <span class="score-num ${scoreClass(p.score)}">${p.score.toFixed(0)}</span>
-    </div>`;
-  }).join("");
-  if (html !== _topSig) { _topSig = html; el.innerHTML = html; }
-}
-$("topsetups-body").addEventListener("click", (e) => {
-  const row = e.target.closest(".ts-row");
-  if (row) openChart(row.dataset.sym);
-});
-$("topsetups-body").addEventListener("keydown", (e) => {
-  if (e.key !== "Enter" && e.key !== " ") return;
-  const row = e.target.closest(".ts-row");
-  if (row) { e.preventDefault(); openChart(row.dataset.sym); }
-});
-
-function setIfChanged(el, html) {
-  if (el._sig !== html) { el._sig = html; el.innerHTML = html; }
-}
-
-// ------------------------- alerts feed (bell) -------------------------
-async function api(path, opts = {}) {
-  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
-  if (S.jwt) headers.Authorization = `Bearer ${S.jwt}`;
-  return fetch(`${API_BASE}${path}`, { ...opts, headers });
-}
-
-async function pollNotifications() {
-  if (!S.jwt) { renderNotifPanel([]); return; }
-  try {
-    const res = await api("/api/v1/notifications");
-    if (!res.ok) return;
-    const body = await res.json();
-    // toasts fire for genuinely new items; the unread badge only clears when
-    // the panel is opened (notifLastId is updated there, not here)
-    const fresh = body.notifications.filter((n) => n.id > S._toastedId);
-    if (fresh.length) {
-      for (const n of fresh.slice(0, 3)) toast(n.message, "warn");
-      S._toastedId = Math.max(...body.notifications.map((n) => n.id));
-    }
-    renderNotifPanel(body.notifications);
-  } catch {}
-}
-setInterval(pollNotifications, 8000);
-
-function renderNotifPanel(items) {
-  const el = $("notif-panel");
-  if (items) S._notifItems = items;
-  const all = S._notifItems || [];
-  const unread = all.filter((n) => n.id > S.notifLastId).length;
-  $("bell-count").textContent = unread;
-  $("bell-count").classList.toggle("hidden", !unread);
-  if (el.classList.contains("hidden")) return;
-  if (!S.jwt) {
-    el.innerHTML = `
-      <div class="notif-item"><b>${t("signIn")}</b><br/>
-        <input id="nl-email" class="nl-input" placeholder="${t("email")}" />
-        <input id="nl-pass" class="nl-input" type="password" placeholder="${t("password")}" />
-        <div style="display:flex;gap:6px;margin-top:6px;">
-          <button id="nl-login" class="ctl ctl-btn">${t("signIn")}</button>
-          <button id="nl-register" class="ctl ctl-btn">${t("signUp")}</button>
-        </div>
-      </div>`;
-    $("nl-login").onclick = () => authFlow("/api/v1/auth/login");
-    $("nl-register").onclick = () => authFlow("/api/v1/auth/register");
-    return;
-  }
-  el.innerHTML = all.length
-    ? all.map((n) => `
-      <div class="notif-item"><b>${esc(n.symbol)}</b> ${esc(n.message)}
-        <div class="delivery">${new Date(n.ts * 1000).toLocaleTimeString()} · ${esc(n.delivery.join(", "))}</div>
-      </div>`).join("")
-    : `<div class="notif-empty">${t("notifEmpty")}</div>`;
-  el.innerHTML += `<div class="notif-actions"><button id="nl-logout" class="ctl ctl-btn">${t("logout")}</button></div>`;
-  const lo = $("nl-logout");
-  if (lo) lo.onclick = () => {
-    S.jwt = null;
-    LS.set("jwt", null);
-    S.notifLastId = 0;
-    LS.set("notifLastId", 0);
-    S._notifItems = [];
-    renderNotifPanel([]);
-    if (ws) ws.close();  // reconnects honestly at the public tier
-  };
-}
-
-async function authFlow(path) {
-  try {
-    const res = await fetch(`${API_BASE}${path}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: $("nl-email").value, password: $("nl-pass").value }),
-    });
-    if (!res.ok) { toast(t("loginError"), "err"); return; }
-    if (path.endsWith("login")) {
-      const body = await res.json();
-      S.jwt = body.access_token;
-      LS.set("jwt", S.jwt);
-      toast("✓ " + t("signIn"));
-      if (ws) ws.close();  // reconnect carries the token → full feed immediately
-      pollNotifications();
-    } else {
-      toast("✓ " + t("signUp"));
-      await authFlow("/api/v1/auth/login");
-    }
-  } catch { toast(t("loginError"), "err"); }
-}
-
-$("bell").addEventListener("click", () => {
-  const panel = $("notif-panel");
-  panel.classList.toggle("hidden");
-  $("settings-menu").classList.add("hidden");
-  if (!panel.classList.contains("hidden") && S._notifItems?.length) {
-    S.notifLastId = Math.max(...S._notifItems.map((n) => n.id));
-    LS.set("notifLastId", S.notifLastId);
-    renderNotifPanel(S._notifItems);
-  } else {
-    renderNotifPanel([]);
-  }
-});
-document.addEventListener("click", (e) => {
-  if (!e.target.closest("#notif-panel") && !e.target.closest("#bell")) $("notif-panel").classList.add("hidden");
-  if (!e.target.closest("#settings-menu") && !e.target.closest("#burger")) $("settings-menu").classList.add("hidden");
-});
-
-$("alert-create").addEventListener("click", async () => {
-  if (!S.jwt) { toast(t("authNeeded"), "warn"); $("notif-panel").classList.remove("hidden"); renderNotifPanel([]); return; }
-  const body = {
-    symbol: chartSym,
-    rule_type: $("alert-type").value,
-    threshold: parseFloat($("alert-threshold").value),
-    cooldown_s: 300,
-    recurring: true,
-  };
-  if (!body.threshold || body.threshold <= 0) { toast(t("thresholdNeeded"), "err"); return; }
-  const res = await api("/api/v1/alerts", { method: "POST", body: JSON.stringify(body) });
-  toast(res.ok ? `✓ ${t("alertCreated")}` : `${res.status}`, res.ok ? "" : "err");
-});
-
-// ------------------------- burger settings -------------------------
-$("burger").addEventListener("click", () => {
-  const menu = $("settings-menu");
-  menu.classList.toggle("hidden");
-  $("notif-panel").classList.add("hidden");
-  if (!menu.classList.contains("hidden")) {
-    $("set-feed").textContent = `${S.feed} · ${S.stats.tracked ?? 0} симв.`;
-  }
-});
-
-$("sound-toggle").addEventListener("click", (e) => {
-  S.soundOn = !S.soundOn;
-  LS.set("sound", S.soundOn);
-  e.target.textContent = S.soundOn ? t("soundOn") : t("soundOff");
-  if (S.soundOn) ping();
-});
-$("lang-toggle").addEventListener("click", (e) => {
-  S.lang = S.lang === "ru" ? "en" : "ru";
-  LS.set("lang", S.lang);
-  e.target.textContent = S.lang === "ru" ? "RU" : "EN";
-  applyI18n();
-});
-$("min-score").addEventListener("change", (e) => { S.minScore = +e.target.value; LS.set("minScore", S.minScore); renderTable(); renderTopSetups(); renderBoard(); });
-$("wall-filter").addEventListener("change", (e) => { S.wallMin = +e.target.value; LS.set("wallMin", S.wallMin); renderTable(); });
-$("search").addEventListener("input", (e) => { S.search = e.target.value.trim(); renderTable(); });
-
-// ------------------------- chart board (right rail) -------------------------
+// ------------------------- board (center) -------------------------
 async function getCandles(sym) {
   const cached = S.candleCache.get(sym);
   if (cached && Date.now() - cached.ts < 60000) return cached.candles;
@@ -585,7 +278,7 @@ function aggregate(candles, tfMin) {
 
 const lpUp = (vis) => vis[vis.length - 1].c >= vis[0].o;
 
-function paintMini(cv, candles, livePrice) {
+function paintTile(cv, candles, livePrice) {
   const dpr = window.devicePixelRatio || 1;
   const W = cv.clientWidth, H = cv.clientHeight;
   if (!W || !H || candles.length < 3) return;
@@ -593,14 +286,14 @@ function paintMini(cv, candles, livePrice) {
   const ctx = cv.getContext("2d");
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
-  const vis = candles.slice(-90).map((c) => ({ ...c }));
+  const vis = candles.slice(-80).map((c) => ({ ...c }));
   if (livePrice && vis.length) vis[vis.length - 1].c = livePrice;
   let lo = Math.min(...vis.map((c) => c.l)), hi = Math.max(...vis.map((c) => c.h));
-  const pad = (hi - lo) * 0.06 || lo * 0.001;
+  const pad = (hi - lo) * 0.07 || lo * 0.001;
   lo -= pad; hi += pad;
   const cw = W / vis.length;
-  const y = (p) => 6 + (1 - (p - lo) / (hi - lo)) * (H - 18);
-  const bw = Math.max(1, Math.min(cw * 0.6, 10));
+  const y = (p) => 4 + (1 - (p - lo) / (hi - lo)) * (H - 10);
+  const bw = Math.max(1, Math.min(cw * 0.6, 12));
   for (let i = 0; i < vis.length; i++) {
     const c = vis[i];
     const col = c.c >= c.o ? "#31976b" : "#c95d63";
@@ -620,7 +313,7 @@ function paintMini(cv, candles, livePrice) {
 }
 
 function boardPages() {
-  const rows = visibleRows(); // same filters as the table: search, watch, score, hidden
+  const rows = sortedRows();
   const per = S.gridSize * S.gridSize;
   const pages = Math.max(1, Math.ceil(rows.length / per));
   S.page = Math.min(S.page, pages - 1);
@@ -628,6 +321,7 @@ function boardPages() {
 }
 
 let _boardSig = "";
+let _boardTf = null;
 function renderBoard() {
   const grid = $("board-grid");
   const { slice, pages } = boardPages();
@@ -635,15 +329,19 @@ function renderBoard() {
   $("board-empty").style.display = slice.length ? "none" : "";
   grid.style.gridTemplateColumns = `repeat(${S.gridSize}, 1fr)`;
   grid.style.gridTemplateRows = `repeat(${S.gridSize}, 1fr)`;
-  const sig = slice.map((r) => r.symbol).join(",");
-  if (sig !== _boardSig) {
+  const sig = `${slice.map((r) => r.symbol).join(",")}|${S.boardTf}`;
+  if (sig !== _boardSig || _boardTf !== S.boardTf) {
     _boardSig = sig;
+    _boardTf = S.boardTf;
     grid.innerHTML = slice.map((r) => `
-      <div class="board-tile" data-sym="${esc(r.symbol)}" tabindex="0" role="button" aria-label="SCALP: ${esc(r.symbol)}">
+      <div class="board-tile" data-sym="${esc(r.symbol)}" tabindex="0" role="button" aria-label="Focus: ${esc(r.symbol)}">
         <div class="tile-head">
-          <span><span class="star ${S.watch.has(r.symbol) ? "on" : ""}" data-star="${esc(r.symbol)}">${S.watch.has(r.symbol) ? "★" : "☆"}</span> <b>${esc(r.symbol)}</b> <span class="tp">${fmtPrice(r.price)}</span></span>
+          <span class="tile-id"><span class="star ${S.watch.has(r.symbol) ? "on" : ""}" data-star="${esc(r.symbol)}">${S.watch.has(r.symbol) ? "★" : "☆"}</span> <b>${esc(r.symbol)}</b></span>
           <span class="tc ${cls(r.change5m)}">${fmtPct(r.change5m, 1)}</span>
+          <span class="ts ${cls(r.surge - 1)}">${r.surge != null ? `${r.surge.toFixed(1)}x` : ""}</span>
+          <span class="score-num ${scoreClass(r.score)}">${r.score != null ? r.score.toFixed(0) : "—"}</span>
         </div>
+        <div class="tile-sub mono"><span class="tp">${fmtPrice(r.price)}</span><span class="dim">${fmtUsd(r.vol1m)}</span><span class="tag-cell ${tagClass(r.tag)}">${esc(r.tag ?? "")}</span></div>
         <div class="tile-canvas-wrap"><canvas></canvas></div>
       </div>`).join("");
   }
@@ -663,7 +361,7 @@ function renderBoard() {
     }
     getCandles(sym).then((candles) => {
       if (!candles.length) return;
-      paintMini(tile.querySelector("canvas"), aggregate(candles, 5), r?.price);
+      paintTile(tile.querySelector("canvas"), aggregate(candles, S.boardTf), r?.price);
     });
   }
 }
@@ -686,11 +384,225 @@ $("board-grid").addEventListener("keydown", (e) => {
   if (tile) { e.preventDefault(); openChart(tile.dataset.sym); }
 });
 $("grid-size").addEventListener("change", (e) => { S.gridSize = +e.target.value; LS.set("grid", S.gridSize); S.page = 0; _boardSig = ""; renderBoard(); });
+$("board-tf").addEventListener("change", (e) => { S.boardTf = +e.target.value; LS.set("boardTf", S.boardTf); S.page = 0; _boardSig = ""; renderBoard(); });
 $("page-prev").addEventListener("click", () => { if (S.page > 0) { S.page -= 1; _boardSig = ""; renderBoard(); } });
 $("page-next").addEventListener("click", () => { S.page += 1; _boardSig = ""; renderBoard(); });
+// board repaint on its own cadence (2s) — decoupled from the 150ms light loop
 setInterval(renderBoard, 2000);
 
-// ------------------------- chart modal (interactive candles) -------------------------
+// ------------------------- coin list (right sidebar) -------------------------
+let _listSig = "";
+function renderCoinList() {
+  const el = $("tab-coins");
+  if (S.sideTab !== "coins") return;
+  const rows = sortedRows();
+  if (!rows.length) { setIfChanged(el, `<div class="empty-note">${S.symbols.length ? t("noMatch") : t("waiting")}</div>`); return; }
+  const html = rows.map((r) => {
+    const imb = r.imbalance ?? 0;
+    const imbW = Math.min(Math.abs(imb) * 50, 50);
+    const star = S.watch.has(r.symbol) ? "★" : "☆";
+    const levelTxt = r.levelDist != null
+      ? `${r.levelDist.toFixed(1)}%${r.levelKind === "resistance" ? "↑" : r.levelKind === "support" ? "↓" : "◎"}`
+      : "";
+    const stale = isStale(r) ? `<span class="tile-stale">${t("stale")}</span>` : "";
+    return `
+    <div class="coin-row" data-sym="${esc(r.symbol)}" tabindex="0" role="button" aria-label="Focus: ${esc(r.symbol)}">
+      <div class="cr-top">
+        <span class="star ${S.watch.has(r.symbol) ? "on" : ""}" data-star="${esc(r.symbol)}">${star}</span>
+        <b>${esc(r.symbol)}</b>${stale}
+        <span class="cr-tag tag-cell ${tagClass(r.tag)}">${esc(r.tag ?? "")}</span>
+        <span class="cr-score mono ${scoreClass(r.score)}">${r.score != null ? r.score.toFixed(0) : ""}</span>
+      </div>
+      <div class="cr-bottom mono">
+        <span class="cr-price">${fmtPrice(r.price)}</span>
+        <span class="${cls(r.change5m)}">${fmtPct(r.change5m, 1)}</span>
+        <span class="${cls(r.surge - 1)}">${r.surge != null ? `${r.surge.toFixed(1)}x` : ""}</span>
+        <span class="dim">${fmtUsd(r.vol1m)}</span>
+        <span class="cr-imb"><span class="imb-meter"><span class="imb-fill ${imb >= 0 ? "bid" : "ask"}" style="width:${imbW}%"></span></span>${levelTxt}</span>
+      </div>
+    </div>`;
+  }).join("");
+  setIfChanged(el, html);
+}
+$("tab-coins").addEventListener("click", (e) => {
+  const star = e.target.closest("[data-star]");
+  if (star) {
+    const sym = star.dataset.star;
+    if (S.watch.has(sym)) S.watch.delete(sym); else S.watch.add(sym);
+    LS.set("watch", [...S.watch]);
+    renderCoinList();
+    return;
+  }
+  const row = e.target.closest(".coin-row");
+  if (row) openChart(row.dataset.sym);
+});
+$("tab-coins").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const row = e.target.closest(".coin-row");
+  if (row) { e.preventDefault(); openChart(row.dataset.sym); }
+});
+
+function setIfChanged(el, html) {
+  if (el._sig !== html) { el._sig = html; el.innerHTML = html; }
+}
+
+// ------------------------- sidebar tabs -------------------------
+document.querySelectorAll(".side-tab").forEach((tabBtn) => {
+  tabBtn.addEventListener("click", () => {
+    document.querySelectorAll(".side-tab").forEach((x) => x.classList.toggle("active", x === tabBtn));
+    S.sideTab = tabBtn.dataset.tab;
+    $("tab-coins").classList.toggle("hidden", S.sideTab !== "coins");
+    $("tab-alerts").classList.toggle("hidden", S.sideTab !== "alerts");
+    if (S.sideTab === "alerts") renderAlertsInline();
+  });
+});
+
+function renderAlertsInline() {
+  const el = $("alerts-inline");
+  if (!S.jwt) {
+    el.innerHTML = `
+      <div class="notif-item"><b>${t("signIn")}</b><br/>
+        <input id="nl-email" class="nl-input" placeholder="${t("email")}" />
+        <input id="nl-pass" class="nl-input" type="password" placeholder="${t("password")}" />
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button id="nl-login" class="ctl ctl-btn">${t("signIn")}</button>
+          <button id="nl-register" class="ctl ctl-btn">${t("signUp")}</button>
+        </div>
+      </div>`;
+    $("nl-login").onclick = () => authFlow("/api/v1/auth/login");
+    $("nl-register").onclick = () => authFlow("/api/v1/auth/register");
+    return;
+  }
+  const items = S._notifItems || [];
+  el.innerHTML = items.length
+    ? items.map((n) => `
+      <div class="notif-item"><b>${esc(n.symbol)}</b> ${esc(n.message)}
+        <div class="delivery">${new Date(n.ts * 1000).toLocaleTimeString()} · ${esc(n.delivery.join(", "))}</div>
+      </div>`).join("")
+    : `<div class="notif-empty">${t("notifEmpty")}</div>`;
+  el.innerHTML += `<div class="notif-actions"><button id="nl-logout" class="ctl ctl-btn">${t("logout")}</button></div>`;
+  const lo = $("nl-logout");
+  if (lo) lo.onclick = () => {
+    S.jwt = null;
+    LS.set("jwt", null);
+    S.notifLastId = 0;
+    LS.set("notifLastId", 0);
+    S._notifItems = [];
+    renderAlertsInline();
+    if (ws) ws.close();
+  };
+}
+
+// ------------------------- notifications -------------------------
+async function api(path, opts = {}) {
+  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (S.jwt) headers.Authorization = `Bearer ${S.jwt}`;
+  return fetch(`${API_BASE}${path}`, { ...opts, headers });
+}
+
+async function pollNotifications() {
+  if (!S.jwt) return;
+  try {
+    const res = await api("/api/v1/notifications");
+    if (!res.ok) return;
+    const body = await res.json();
+    S._notifItems = body.notifications;
+    const fresh = body.notifications.filter((n) => n.id > S._toastedId);
+    if (fresh.length) {
+      for (const n of fresh.slice(0, 3)) toast(n.message, "warn");
+      S._toastedId = Math.max(...body.notifications.map((n) => n.id));
+    }
+    const unread = body.notifications.filter((n) => n.id > S.notifLastId).length;
+    $("bell-count").textContent = unread;
+    $("bell-count").classList.toggle("hidden", !unread);
+    if (S.sideTab === "alerts") renderAlertsInline();
+  } catch {}
+}
+setInterval(pollNotifications, 8000);
+
+async function authFlow(path) {
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: $("nl-email").value, password: $("nl-pass").value }),
+    });
+    if (!res.ok) { toast(t("loginError"), "err"); return; }
+    if (path.endsWith("login")) {
+      const body = await res.json();
+      S.jwt = body.access_token;
+      LS.set("jwt", S.jwt);
+      toast("✓ " + t("signIn"));
+      if (ws) ws.close(); // reconnect carries the token → full feed
+      pollNotifications();
+    } else {
+      toast("✓ " + t("signUp"));
+      await authFlow("/api/v1/auth/login");
+    }
+  } catch { toast(t("loginError"), "err"); }
+}
+
+$("bell").addEventListener("click", () => {
+  S.sideTab = "alerts";
+  document.querySelectorAll(".side-tab").forEach((x) => x.classList.toggle("active", x.dataset.tab === "alerts"));
+  $("tab-coins").classList.add("hidden");
+  $("tab-alerts").classList.remove("hidden");
+  $("settings-menu").classList.add("hidden");
+  if (S._notifItems?.length) {
+    S.notifLastId = Math.max(...S._notifItems.map((n) => n.id));
+    LS.set("notifLastId", S.notifLastId);
+    const unread = S._notifItems.filter((n) => n.id > S.notifLastId).length;
+    $("bell-count").textContent = unread;
+    $("bell-count").classList.toggle("hidden", !unread);
+  }
+  renderAlertsInline();
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#notif-panel") && !e.target.closest("#bell")) $("notif-panel").classList.add("hidden");
+  if (!e.target.closest("#settings-menu") && !e.target.closest("#burger")) $("settings-menu").classList.add("hidden");
+});
+
+$("alert-create").addEventListener("click", async () => {
+  if (!S.jwt) { toast(t("authNeeded"), "warn"); $("bell").click(); return; }
+  const body = {
+    symbol: chartSym,
+    rule_type: $("alert-type").value,
+    threshold: parseFloat($("alert-threshold").value),
+    cooldown_s: 300,
+    recurring: true,
+  };
+  if (!body.threshold || body.threshold <= 0) { toast(t("thresholdNeeded"), "err"); return; }
+  const res = await api("/api/v1/alerts", { method: "POST", body: JSON.stringify(body) });
+  toast(res.ok ? `✓ ${t("alertCreated")}` : `${res.status}`, res.ok ? "" : "err");
+});
+
+// ------------------------- toolbar / burger -------------------------
+$("burger").addEventListener("click", () => {
+  const menu = $("settings-menu");
+  menu.classList.toggle("hidden");
+  if (!menu.classList.contains("hidden")) {
+    $("set-feed").textContent = `${S.feed} · ${S.stats.tracked ?? 0}`;
+  }
+});
+
+$("sound-toggle").addEventListener("click", (e) => {
+  S.soundOn = !S.soundOn;
+  LS.set("sound", S.soundOn);
+  e.target.textContent = S.soundOn ? t("soundOn") : t("soundOff");
+  if (S.soundOn) ping();
+});
+$("lang-toggle").addEventListener("click", (e) => {
+  S.lang = S.lang === "ru" ? "en" : "ru";
+  LS.set("lang", S.lang);
+  e.target.textContent = S.lang === "ru" ? "RU" : "EN";
+  applyI18n();
+});
+$("min-score").addEventListener("change", (e) => { S.minScore = +e.target.value; LS.set("minScore", S.minScore); renderBoard(); renderCoinList(); });
+$("wall-filter").addEventListener("change", (e) => { S.wallMin = +e.target.value; LS.set("wallMin", S.wallMin); });
+$("search").addEventListener("input", (e) => { S.search = e.target.value.trim(); renderBoard(); renderCoinList(); });
+$("sort-by").addEventListener("change", (e) => { S.sortKey = e.target.value; LS.set("sort", S.sortKey); renderBoard(); renderCoinList(); });
+
+// ------------------------- focus modal -------------------------
 const modal = $("chart-modal");
 let chartSym = null;
 
@@ -823,6 +735,16 @@ $("tf-picker").addEventListener("click", (e) => {
 const AXIS_W = 74, TIME_H = 26, VOL_H = 56;
 const UP = "#31976b", DOWN = "#c95d63";
 
+function fitCanvas(cv, logicalH) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.max(200, cv.clientWidth || cv.width / dpr);
+  const bw = Math.round(cssW * dpr), bh = Math.round(logicalH * dpr);
+  if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, W: cssW, H: logicalH };
+}
+
 function drawChart() {
   if (!chartSym || modal.classList.contains("hidden")) return;
   const cv = $("chart-canvas");
@@ -897,17 +819,29 @@ function drawChart() {
     ctx.fillRect(cx(i) - bw / 2, Math.min(yO, yC), bw, Math.max(1, Math.abs(yC - yO)));
   }
 
-  ctx.textAlign = "left";
-  for (const z of chart.levels.slice(0, 6)) {
-    if (z.high < lo || z.low > hi) continue;
+  // Level overlays: quality over quantity — only the 3 strongest (touches),
+  // opacity/width proportional to relative strength, label only the strongest.
+  const maxTouches = Math.max(1, ...chart.levels.map((z) => z.touches));
+  const strongest = [...chart.levels]
+    .sort((a, b) => b.touches - a.touches)
+    .slice(0, 3);
+  strongest.forEach((z, rank) => {
+    if (z.high < lo || z.low > hi) return;
     const my = y(z.mid);
+    const strength = z.touches / maxTouches;          // 0..1
+    const distRank = rank;                            // 0 = strongest
     ctx.setLineDash([6, 4]);
-    ctx.strokeStyle = z.kind === "resistance" ? "rgba(201,93,99,0.4)" : "rgba(49,151,107,0.4)";
+    ctx.lineWidth = 1 + strength * 1.5;               // proportional width
+    ctx.strokeStyle = z.kind === "resistance"
+      ? `rgba(201,93,99,${0.3 + strength * 0.4})`
+      : `rgba(49,151,107,${0.3 + strength * 0.4})`;
     ctx.beginPath(); ctx.moveTo(0, my); ctx.lineTo(plotW, my); ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle = "rgba(152,161,173,0.9)";
-    ctx.fillText(`${t(z.kind)} ×${z.touches}`, 6, my - 4);
-  }
+    if (distRank === 0) {                             // label only the strongest
+      ctx.fillStyle = "rgba(152,161,173,0.95)";
+      ctx.fillText(`${t(z.kind)} ×${z.touches}`, 6, my - 4);
+    }
+  });
 
   for (const w of chart.walls) {
     if (w.price < lo || w.price > hi) continue;
@@ -959,47 +893,19 @@ function drawChart() {
       }
     }
   }
-
-  ctx.fillStyle = "#626b77";
-  ctx.textAlign = "right";
-  ctx.fillText("drag to pan · scroll to zoom", plotW - 8, priceTop + 12);
-  ctx.textAlign = "left";
-}
-
-function fitCanvas(cv, logicalH) {
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = Math.max(200, cv.clientWidth || cv.width / dpr);
-  const bw = Math.round(cssW * dpr), bh = Math.round(logicalH * dpr);
-  if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
-  const ctx = cv.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return { ctx, W: cssW, H: logicalH };
 }
 
 // ------------------------- i18n -------------------------
 function applyI18n() {
   document.documentElement.lang = S.lang;
-  const ths = document.querySelectorAll("#main-table thead th");
-  const names = ["ticker", "price", "trend", "ch5m", "surge", "imb", "spread", "level", "setup"];
-  ths.forEach((th, i) => {
-    if (!names[i]) return;
-    const hint = th.querySelector(".hint-inline");
-    th.textContent = t(names[i]);
-    if (hint) th.appendChild(hint);
-  });
-  $("h2-scanner").textContent = t("scanner");
-  $("h2-board").textContent = t("board");
-  $("h2-topsetups").textContent = t("topsetups");
-  $("bell").childNodes.forEach((n) => { if (n.nodeType === 3) n.textContent = t("alertsBtn"); });
   const setMap = { "set-feed-label": "feed", "set-sound-label": "soundLabel", "set-lang-label": "langLabel",
-                   "set-score-label": "minScoreLabel", "set-wall-label": "minWallLabel", "set-tz-label": "tzLabel" };
+                   "set-score-label": "minScoreLabel", "set-wall-label": "minWallLabel" };
   for (const [id, key] of Object.entries(setMap)) {
     const el = $(id);
     if (el) el.textContent = t(key);
   }
+  $("bell").childNodes.forEach((n) => { if (n.nodeType === 3) n.textContent = t("alertsBtn"); });
   $("search").placeholder = t("searchPh");
-  $("table-empty").textContent = S.symbols.length ? t("noMatch") : t("waiting");
-  $("board-empty").textContent = t("waiting");
   $("chart-close").textContent = t("close");
   $("sound-toggle").textContent = S.soundOn ? t("soundOn") : t("soundOff");
   $("alert-create").textContent = t("createAlert");
@@ -1010,29 +916,40 @@ function applyI18n() {
   const prevSel = typeSel.value;
   typeSel.innerHTML = ruleKeys.map((k, i) => `<option value="${ruleVals[i]}">${t(k)}</option>`).join("");
   typeSel.value = prevSel;
-  _topSig = ""; renderTopSetups();
+  const sortSel = $("sort-by");
+  const sortPrev = sortSel.value;
+  const sortDefs = [["score", "Скоринг", "Score"], ["surge", "Всплеск", "Surge"], ["vol1m", "Объём 1м", "1m Volume"],
+                    ["speed", "Скорость", "Speed"], ["change5m", "5м %", "5m %"], ["levelDist", "До уровня", "To level"]];
+  sortSel.innerHTML = sortDefs.map(([v, ru, en]) => `<option value="${v}">${S.lang === "ru" ? ru : en}</option>`).join("");
+  sortSel.value = sortPrev;
+  const tabBtns = document.querySelectorAll(".side-tab");
+  if (tabBtns[0]) tabBtns[0].textContent = t("coins");
+  if (tabBtns[1]) tabBtns[1].textContent = t("alerts");
+  renderCoinList();
+  renderAlertsTabIfVisible();
+}
+
+function renderAlertsTabIfVisible() {
+  if (S.sideTab === "alerts") renderAlertsInline();
 }
 
 // ------------------------- boot -------------------------
 $("min-score").value = String(S.minScore);
 $("wall-filter").value = String(S.wallMin);
 $("grid-size").value = String(S.gridSize);
+$("board-tf").value = String(S.boardTf);
+$("sort-by").value = S.sortKey;
 $("sound-toggle").textContent = S.soundOn ? t("soundOn") : t("soundOff");
 $("lang-toggle").textContent = S.lang === "ru" ? "RU" : "EN";
 
 applyI18n();
-updateSortIndicator();
 pollNotifications();
 
-setInterval(renderLoop, 150);
-setInterval(() => { $("clock").textContent = new Date().toISOString().slice(11, 19); }, 1000);
-
-function renderLoop() {
-  renderTable();
-  drawSparks();
-  renderTopSetups();
-  renderBoard();
+// single light loop (150ms): coin list + focus chart; board repaints on its own 2s cadence
+setInterval(() => {
+  renderCoinList();
   drawChart();
-}
+}, 150);
+setInterval(() => { $("clock").textContent = new Date().toISOString().slice(11, 19); }, 1000);
 
 connect();

@@ -112,7 +112,24 @@ def build_cascades(
         if conflict:
             continue
         kept.append(z)
-    return sorted(kept, key=lambda z: z.touches, reverse=True)
+    # readability: merge zones narrower than 0.05% of price into the same-kind
+    # neighbour, then cap the count (the chart draws only the strongest few)
+    price = candles[-1].close
+    min_width = price * 0.0005
+    merged: list[Cascade] = []
+    for z in sorted(kept, key=lambda z: z.mid):
+        if merged and z.mid - merged[-1].mid < min_width and z.kind == merged[-1].kind:
+            a, b = merged[-1], z
+            lo, hi = min(a.low, b.low), max(a.high, b.high)
+            merged[-1] = Cascade(
+                kind=a.kind, low=lo, high=hi, mid=(lo + hi) / 2,
+                touches=a.touches + b.touches,
+                last_touch_t=max(a.last_touch_t, b.last_touch_t),
+                pivot_indices=a.pivot_indices + b.pivot_indices,
+            )
+        else:
+            merged.append(z)
+    return sorted(merged, key=lambda z: z.touches, reverse=True)[:8]
 
 
 def _make_zone(zkind: str, cluster: list[Pivot]) -> Cascade:

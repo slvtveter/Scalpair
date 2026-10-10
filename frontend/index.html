@@ -8,25 +8,62 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/styles.css?v=0.4.2" />
+  <link rel="stylesheet" href="/css/styles.css?v=0.5.0" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2313161a'/><path d='M22 68 L42 34 L56 56 L78 28' stroke='%232f9e63' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
 </head>
 <body>
-  <!-- ================= TOP BAR (минимум) ================= -->
-  <header class="topbar">
+  <!-- ================= TOOLBAR ================= -->
+  <header class="toolbar">
     <div class="brand">
       <span class="brand-name">Scalpair</span>
       <span class="brand-status mono" id="feed-badge">…</span>
     </div>
 
-    <div class="controls">
-      <input id="search" class="ctl search-input" type="search" placeholder="Поиск…" aria-label="Symbol search" />
-      <button id="bell" class="ctl ctl-btn" aria-label="Notifications">Алерты<span id="bell-count" class="bell-count hidden">0</span></button>
-      <button id="burger" class="ctl ctl-btn burger" aria-label="Settings">☰</button>
+    <input id="search" class="ctl search-input" type="search" placeholder="Поиск…" aria-label="Symbol search" />
+
+    <div class="tb-group">
+      <label class="tb-label">Сетка</label>
+      <select id="grid-size" class="ctl" aria-label="Board grid size">
+        <option value="1">1×1</option>
+        <option value="2">2×2</option>
+        <option value="3" selected>3×3</option>
+        <option value="4">4×4</option>
+      </select>
     </div>
+
+    <div class="tb-group">
+      <label class="tb-label">ТФ</label>
+      <select id="board-tf" class="ctl" aria-label="Board timeframe">
+        <option value="1">1m</option>
+        <option value="5" selected>5m</option>
+        <option value="15">15m</option>
+        <option value="60">1h</option>
+      </select>
+    </div>
+
+    <div class="tb-group">
+      <label class="tb-label">Сорт</label>
+      <select id="sort-by" class="ctl" aria-label="Sort by">
+        <option value="score" selected>Скоринг</option>
+        <option value="surge">Всплеск</option>
+        <option value="vol1m">Объём 1м</option>
+        <option value="speed">Скорость</option>
+        <option value="change5m">5м %</option>
+        <option value="levelDist">До уровня</option>
+      </select>
+    </div>
+
+    <button id="page-prev" class="ctl ctl-btn" aria-label="Previous page">‹</button>
+    <span id="page-ind" class="mono page-ind">1/1</span>
+    <button id="page-next" class="ctl ctl-btn" aria-label="Next page">›</button>
+
+    <div class="tb-spacer"></div>
+
+    <button id="bell" class="ctl ctl-btn" aria-label="Notifications">Алерты<span id="bell-count" class="bell-count hidden">0</span></button>
+    <button id="burger" class="ctl ctl-btn burger" aria-label="Settings">☰</button>
   </header>
 
-  <!-- ================= SETTINGS MENU (burger) ================= -->
+  <!-- burger settings -->
   <div id="settings-menu" class="settings-menu hidden">
     <div class="set-row"><span id="set-feed-label">Фид</span><span class="mono" id="set-feed">—</span></div>
     <div class="set-row"><span id="set-sound-label">Звук (скор ≥ 85)</span><button id="sound-toggle" class="ctl ctl-btn" aria-label="Toggle alert sound">Звук выкл</button></div>
@@ -48,77 +85,34 @@
         <option value="5000000">≥ $5M</option>
       </select>
     </div>
-    <div class="set-row"><span id="set-tz-label">Часовой пояс</span><span class="mono" style="color:var(--text-3)">UTC</span></div>
   </div>
 
-  <!-- notifications dropdown + toasts -->
+  <!-- notifications panel -->
   <div id="notif-panel" class="notif-panel hidden mono"></div>
   <div id="toasts" class="toasts"></div>
 
-  <!-- ================= MAIN GRID ================= -->
+  <!-- ================= MAIN: board (center) + coin list (right) ================= -->
   <main class="layout">
-    <!-- Left: top setups + scanner table -->
-    <section class="left-col">
-      <section class="panel topsetups-panel">
-        <div class="panel-head">
-          <h2 id="h2-topsetups">Топ сетапы</h2>
-          <span class="panel-hint mono" id="feed-hint">Binance · Bybit · OKX</span>
-        </div>
-        <div id="topsetups-body" class="topsetups-body">
-          <div class="empty-note">движок считает…</div>
-        </div>
-      </section>
-
-      <section class="panel table-panel" id="table-panel">
-        <div class="panel-head">
-          <h2 id="h2-scanner">Сканер</h2>
-          <span class="panel-hint mono">L2 · flow · уровни</span>
-        </div>
-        <div class="table-wrap">
-          <table class="term-table" id="main-table">
-            <thead>
-              <tr>
-                <th class="col-sym">Тикер</th>
-                <th class="num">Цена</th>
-                <th class="col-trend">Тренд <span class="hint-inline">10м</span></th>
-                <th class="num">5м %</th>
-                <th class="num">Всплеск</th>
-                <th class="col-imb">Стакан</th>
-                <th class="num">Уровень</th>
-                <th class="col-tag">Сетап</th>
-              </tr>
-            </thead>
-            <tbody id="table-body"></tbody>
-          </table>
-          <div id="table-empty" class="empty-note">ожидание данных…</div>
-        </div>
-      </section>
+    <section class="panel board-panel">
+      <div class="board-grid" id="board-grid"></div>
+      <div class="empty-note board-empty-note" id="board-empty">ожидание данных…</div>
     </section>
 
-    <!-- Right: chart board -->
-    <aside class="rail">
-      <section class="panel board-panel" id="board-panel">
-        <div class="panel-head">
-          <h2 id="h2-board">Доска</h2>
-          <div class="board-controls">
-            <select id="grid-size" class="ctl" aria-label="Board grid size">
-              <option value="1">1×1</option>
-              <option value="2">2×2</option>
-              <option value="3" selected>3×3</option>
-              <option value="4">4×4</option>
-            </select>
-            <button id="page-prev" class="ctl ctl-btn" aria-label="Previous page">‹</button>
-            <span id="page-ind" class="mono page-ind">1/1</span>
-            <button id="page-next" class="ctl ctl-btn" aria-label="Next page">›</button>
-          </div>
+    <aside class="sidebar">
+      <div class="side-tabs">
+        <button class="side-tab active" data-tab="coins">Монеты</button>
+        <button class="side-tab" data-tab="alerts">Алерты</button>
+      </div>
+      <div id="tab-coins" class="coin-list" role="list"></div>
+      <div id="tab-alerts" class="coin-list hidden">
+        <div class="notif-inline" id="alerts-inline">
+          <div class="empty-note">войдите через «Алерты», чтобы видеть серверные оповещения</div>
         </div>
-        <div class="board-grid" id="board-grid"></div>
-        <div class="empty-note" id="board-empty">ожидание данных…</div>
-      </section>
+      </div>
     </aside>
   </main>
 
-  <!-- ================= CHART MODAL ================= -->
+  <!-- ================= FOCUS MODAL ================= -->
   <div id="chart-modal" class="modal hidden">
     <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="chart-title">
       <div class="modal-head">
@@ -152,9 +146,8 @@
     </div>
   </div>
 
-  <!-- tiny clock, bottom-right -->
   <div class="clock-corner mono" id="clock">--:--:--</div>
 
-  <script src="/js/app.js?v=0.4.2"></script>
+  <script src="/js/app.js?v=0.5.0"></script>
 </body>
 </html>
