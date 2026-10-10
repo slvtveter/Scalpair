@@ -396,7 +396,12 @@ function renderCoinList() {
   const el = $("tab-coins");
   if (S.sideTab !== "coins") return;
   const rows = sortedRows();
-  if (!rows.length) { setIfChanged(el, `<div class="empty-note">${S.symbols.length ? t("noMatch") : t("waiting")}</div>`); return; }
+  if (!rows.length) {
+    const warm = S.feed !== "—" && (S.stats.tracked ?? 0) > 0;
+    const msg = warm ? "фид подключён — индикаторы прогреваются (~30–60 с)…" : t("waiting");
+    setIfChanged(el, `<div class="empty-note">${msg}</div>`);
+    return;
+  }
   const html = rows.map((r) => {
     const imb = r.imbalance ?? 0;
     const imbW = Math.min(Math.abs(imb) * 50, 50);
