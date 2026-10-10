@@ -327,6 +327,9 @@ function renderBoard() {
   const { slice, pages } = boardPages();
   $("page-ind").textContent = `${S.page + 1}/${pages}`;
   $("board-empty").style.display = slice.length ? "none" : "";
+  $("board-empty").textContent = S.waking
+    ? "сервер просыпается (free-тариф, до ~60 с)…"
+    : t("waiting");
   grid.style.gridTemplateColumns = `repeat(${S.gridSize}, 1fr)`;
   grid.style.gridTemplateRows = `repeat(${S.gridSize}, 1fr)`;
   const sig = `${slice.map((r) => r.symbol).join(",")}|${S.boardTf}`;
@@ -397,8 +400,11 @@ function renderCoinList() {
   if (S.sideTab !== "coins") return;
   const rows = sortedRows();
   if (!rows.length) {
-    const warm = S.feed !== "—" && (S.stats.tracked ?? 0) > 0;
-    const msg = warm ? "фид подключён — индикаторы прогреваются (~30–60 с)…" : t("waiting");
+    const msg = S.waking
+      ? "сервер просыпается (free-тариф, до ~60 с)…"
+      : S.feed !== "—"
+        ? "фид подключён — индикаторы прогреваются (~30–60 с)…"
+        : t("waiting");
     setIfChanged(el, `<div class="empty-note">${msg}</div>`);
     return;
   }
@@ -899,6 +905,30 @@ function drawChart() {
     }
   }
 }
+
+// ------------------------- cold-start wake-up (Render free tier) -------------------------
+// The free backend sleeps after 15 idle minutes. While it is down we poll
+// /health every 5s and show an explicit "waking up" status, so the page never
+// looks broken — it renders instantly and fills in when the server wakes.
+S.waking = false;
+setInterval(() => {
+  if (S.symbols.length > 0) {
+    if (S.waking) { S.waking = false; renderBoard(); }
+    return;
+  }
+  S.waking = true;
+  fetch(`${API_BASE}/api/v1/health`, { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .then((h) => {
+      if (h && (h.tracked_symbols ?? 0) > 0 && S.symbols.length === 0) {
+        if (!ws || ws.readyState > 1) { wsAttempt = 0; connect(); }
+        renderBoard(); renderCoinList();
+      }
+    })
+    .catch(() => {});
+  renderBoard();
+  renderCoinList();
+}, 5000);
 
 // ------------------------- i18n -------------------------
 function applyI18n() {
