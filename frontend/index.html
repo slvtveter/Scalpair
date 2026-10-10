@@ -8,129 +8,112 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/css/styles.css?v=0.3.2" />
+  <link rel="stylesheet" href="/css/styles.css?v=0.4.1" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%2313161a'/><path d='M22 68 L42 34 L56 56 L78 28' stroke='%232f9e63' stroke-width='7' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>" />
 </head>
 <body>
-  <!-- ================= TOP BAR ================= -->
+  <!-- ================= TOP BAR (минимум) ================= -->
   <header class="topbar">
     <div class="brand">
       <span class="brand-name">Scalpair</span>
-      <span class="badge" id="feed-badge">Connecting</span>
-    </div>
-
-    <div class="status-cluster mono">
-      <span class="stat"><label>Ingest</label><span id="latency-val">—</span></span>
-      <span class="stat"><label>Symbols</label><span id="symbols-val">0</span></span>
-      <span class="stat"><label>Msg/s</label><span id="msgrate-val">0</span></span>
-      <span class="stat"><label>UTC</label><span id="clock">--:--:--</span></span>
+      <span class="brand-status mono" id="feed-badge">…</span>
     </div>
 
     <div class="controls">
       <input id="search" class="ctl search-input" type="search" placeholder="Поиск…" aria-label="Symbol search" />
-      <label class="watch-only-label"><input type="checkbox" id="watch-only" /> ★</label>
-      <button id="view-toggle" class="ctl ctl-btn" title="Table / chart board">Board</button>
-      <select id="grid-size" class="ctl" title="Board grid size" aria-label="Board grid size">
-        <option value="1">1×1</option>
-        <option value="2">2×2</option>
-        <option value="3" selected>3×3</option>
-        <option value="4">4×4</option>
-      </select>
-      <button id="page-prev" class="ctl ctl-btn" aria-label="Previous page">‹</button>
-      <span id="page-ind" class="mono page-ind">1/1</span>
-      <button id="page-next" class="ctl ctl-btn" aria-label="Next page">›</button>
-      <select id="min-score" class="ctl" title="Minimum AI score filter" aria-label="Minimum AI score filter">
-        <option value="0" selected>Score ≥ 0</option>
-        <option value="40">Score ≥ 40</option>
-        <option value="60">Score ≥ 60</option>
-        <option value="80">Score ≥ 80</option>
-        <option value="90">Score ≥ 90</option>
-      </select>
-      <select id="wall-filter" class="ctl" title="Wall notional filter" aria-label="Wall notional filter">
-        <option value="0" selected>Walls: all</option>
-        <option value="250000">Walls ≥ $250K</option>
-        <option value="1000000">Walls ≥ $1M</option>
-        <option value="5000000">Walls ≥ $5M</option>
-      </select>
-      <button id="sound-toggle" class="ctl ctl-btn" title="Alert sound for setups with score ≥ 85" aria-label="Toggle alert sound">Sound off</button>
-      <button id="lang-toggle" class="ctl ctl-btn" aria-label="Language">RU</button>
-      <button id="bell" class="ctl ctl-btn" aria-label="Notifications">Alerts<span id="bell-count" class="bell-count hidden">0</span></button>
+      <button id="bell" class="ctl ctl-btn" aria-label="Notifications">Алерты<span id="bell-count" class="bell-count hidden">0</span></button>
+      <button id="burger" class="ctl ctl-btn burger" aria-label="Settings">☰</button>
     </div>
   </header>
 
-  <!-- ================= TICKER STRIP ================= -->
-  <div class="ticker-strip" id="ticker-strip">
-    <div class="ticker-track" id="ticker-track"></div>
+  <!-- ================= SETTINGS MENU (burger) ================= -->
+  <div id="settings-menu" class="settings-menu hidden">
+    <div class="set-row"><span>Фид</span><span class="mono" id="set-feed">—</span></div>
+    <div class="set-row"><span>Звук (скор ≥ 85)</span><button id="sound-toggle" class="ctl ctl-btn" aria-label="Toggle alert sound">Звук выкл</button></div>
+    <div class="set-row"><span>Язык / Language</span><button id="lang-toggle" class="ctl ctl-btn">RU</button></div>
+    <div class="set-row"><span>Мин. скоринг</span>
+      <select id="min-score" class="ctl" aria-label="Minimum AI score filter">
+        <option value="0" selected>≥ 0</option>
+        <option value="40">≥ 40</option>
+        <option value="60">≥ 60</option>
+        <option value="80">≥ 80</option>
+        <option value="90">≥ 90</option>
+      </select>
+    </div>
+    <div class="set-row"><span>Мин. стена</span>
+      <select id="wall-filter" class="ctl" aria-label="Wall notional filter">
+        <option value="0" selected>все</option>
+        <option value="250000">≥ $250K</option>
+        <option value="1000000">≥ $1M</option>
+        <option value="5000000">≥ $5M</option>
+      </select>
+    </div>
+    <div class="set-row"><span>Часовой пояс</span><span class="mono" style="color:var(--text-3)">UTC</span></div>
   </div>
+
+  <!-- notifications dropdown + toasts -->
+  <div id="notif-panel" class="notif-panel hidden mono"></div>
+  <div id="toasts" class="toasts"></div>
 
   <!-- ================= MAIN GRID ================= -->
   <main class="layout">
-    <!-- Chart board -->
-    <section class="panel board-panel hidden" id="board-panel">
-      <div class="board-grid" id="board-grid"></div>
-      <div class="empty-note" id="board-empty">waiting for market data…</div>
+    <!-- Left: top setups + scanner table -->
+    <section class="left-col">
+      <section class="panel topsetups-panel">
+        <div class="panel-head">
+          <h2 id="h2-topsetups">Топ сетапы</h2>
+          <span class="panel-hint mono" id="feed-hint">—</span>
+        </div>
+        <div id="topsetups-body" class="topsetups-body">
+          <div class="empty-note">движок считает…</div>
+        </div>
+      </section>
+
+      <section class="panel table-panel" id="table-panel">
+        <div class="panel-head">
+          <h2 id="h2-scanner">Сканер</h2>
+          <span class="panel-hint mono">L2 · flow · уровни</span>
+        </div>
+        <div class="table-wrap">
+          <table class="term-table" id="main-table">
+            <thead>
+              <tr>
+                <th class="col-sym">Тикер</th>
+                <th class="num">Цена</th>
+                <th class="col-trend">Тренд <span class="hint-inline">10м</span></th>
+                <th class="num">5м %</th>
+                <th class="num">Всплеск</th>
+                <th class="col-imb">Стакан</th>
+                <th class="num">Уровень</th>
+                <th class="col-tag">Сетап</th>
+              </tr>
+            </thead>
+            <tbody id="table-body"></tbody>
+          </table>
+          <div id="table-empty" class="empty-note">ожидание данных…</div>
+        </div>
+      </section>
     </section>
 
-    <!-- Terminal table -->
-    <section class="panel table-panel" id="table-panel">
-      <div class="panel-head">
-        <h2 id="h2-scanner">Сканер</h2>
-        <span class="panel-hint mono">L2 walls · flow · AI score</span>
-      </div>
-      <div class="table-wrap">
-        <table class="term-table" id="main-table">
-          <thead>
-            <tr>
-              <th class="col-sym">Ticker</th>
-              <th class="num">Price</th>
-              <th class="col-trend">Trend <span class="hint-inline">10m</span></th>
-              <th class="num">5m %</th>
-              <th class="num">NATR</th>
-              <th class="num">Скор.</th>
-              <th class="num">1m Vol</th>
-              <th class="num">Surge</th>
-              <th class="col-imb">Book Imb</th>
-              <th class="num">Wall</th>
-              <th class="num">Dist</th>
-              <th class="num">Fund</th>
-              <th class="num">Уровень</th>
-              <th class="num col-score">AI Score</th>
-              <th class="col-tag">Setup</th>
-            </tr>
-          </thead>
-          <tbody id="table-body"></tbody>
-        </table>
-        <div id="table-empty" class="empty-note">waiting for market data…</div>
-      </div>
-    </section>
-
-    <!-- Right rail -->
+    <!-- Right: chart board -->
     <aside class="rail">
-      <section class="panel hotlist">
+      <section class="panel board-panel" id="board-panel">
         <div class="panel-head">
-          <h2 id="h2-hotlist">AI Подборка</h2>
-          <span class="badge subtle" id="hotlist-mode">Top 5</span>
+          <h2 id="h2-board">Доска</h2>
+          <div class="board-controls">
+            <select id="grid-size" class="ctl" aria-label="Board grid size">
+              <option value="1">1×1</option>
+              <option value="2">2×2</option>
+              <option value="3" selected>3×3</option>
+              <option value="4">4×4</option>
+            </select>
+            <button id="page-prev" class="ctl ctl-btn" aria-label="Previous page">‹</button>
+            <span id="page-ind" class="mono page-ind">1/1</span>
+            <button id="page-next" class="ctl ctl-btn" aria-label="Next page">›</button>
+          </div>
         </div>
-        <div id="hotlist-body" class="hotlist-body">
-          <div class="empty-note">scoring engine warming up…</div>
-        </div>
-      </section>
-
-      <section class="panel radar-panel">
-        <div class="panel-head">
-          <h2 id="h2-radar">Радар плотностей</h2>
-          <span class="panel-hint mono">distance % vs notional</span>
-        </div>
-        <canvas id="radar-canvas" width="520" height="300"></canvas>
-        <div class="radar-legend mono">
-          <span class="lg lg-bid">Bid walls</span>
-          <span class="lg lg-ask">Ask walls</span>
-        </div>
-      </section>
-
-      <section class="panel alerts-panel">
-        <div class="panel-head"><h2 id="h2-alerts">Алерты</h2><span class="badge subtle" id="alert-count">0</span></div>
-        <div id="alerts-body" class="alerts-body mono"><div class="empty-note">no alerts fired yet</div></div>
+        <div class="board-grid" id="board-grid"></div>
+        <div class="empty-note" id="board-empty">ожидание данных…</div>
       </section>
     </aside>
   </main>
@@ -148,7 +131,7 @@
             <button class="tf-btn" data-tf="60">1h</button>
           </div>
           <span id="chart-tag" class="tag-text"></span>
-          <button id="chart-close" class="ctl ctl-btn">Close</button>
+          <button id="chart-close" class="ctl ctl-btn">Закрыть</button>
         </div>
       </div>
       <canvas id="chart-canvas" width="900" height="380"></canvas>
@@ -169,15 +152,9 @@
     </div>
   </div>
 
-  <!-- notifications dropdown + toasts -->
-  <div id="notif-panel" class="notif-panel hidden mono"></div>
-  <div id="toasts" class="toasts"></div>
+  <!-- tiny clock, bottom-right -->
+  <div class="clock-corner mono" id="clock">--:--:--</div>
 
-  <footer class="footer mono">
-    <span>Scalpair · read-only analytics · no private keys · no order execution · public exchange data</span>
-    <span id="foot-stats">—</span>
-  </footer>
-
-  <script src="/js/app.js?v=0.3.2"></script>
+  <script src="/js/app.js?v=0.4.1"></script>
 </body>
 </html>

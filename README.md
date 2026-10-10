@@ -127,3 +127,14 @@ Environment knobs (see `.env.example`): `DATA_FEED`, `TOP_SYMBOLS`, `ML_SCORE_IN
 - Public, unauthenticated exchange endpoints only — no API keys anywhere in the codebase.
 - No wallet/signing/execution code exists in this repository.
 - All services bind inside the local Docker network; no external telemetry.
+
+
+## Компоновка терминала (v0.4 — минимализм)
+
+- **Слева**: «Топ сетапы» (3 строки: монета, цена, всплеск, тег, причина) + сканер
+  (Тикер · Цена · Тренд · 5м % · Всплеск · Стакан · Уровень · Сетап).
+- **Справа**: доска графиков 1×1–4×4 с пагинацией прямо в её шапке.
+- **Настройки** (звук, язык RU/EN, фильтры, статус фида) — в бургер-меню ☰.
+- Часы UTC — маленькие, в правом нижнем углу. Никакого другого «хрома».
+- Полный набор метрик (NATR, скорость, стены, скоринг) по-прежнему стримится
+  через `/api/v1/screeners/overview` и WS — таблица показывает только основное.

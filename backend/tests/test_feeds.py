@@ -246,3 +246,63 @@ class TestResilience:
         assert c.trades, "mock feed produced no trade events"
         assert c.candles, "mock feed produced no candle events"
         assert c.tickers, "mock feed produced no ticker events"
+
+
+# ---------------------------------------------------------------------------
+# OKX parsing
+# ---------------------------------------------------------------------------
+from app.feeds.okx import OkxSwapFeed, inst_to_symbol  # noqa: E402
+
+
+class TestOkxParser:
+    def make_feed(self, collector: Collector) -> OkxSwapFeed:
+        feed = OkxSwapFeed(collector.callbacks())
+        feed.top_symbols = ["BTCUSDT"]
+        feed._insts = {"BTC-USDT-SWAP": "BTCUSDT"}
+        return feed
+
+    @pytest.mark.asyncio
+    async def test_books_snapshot_then_update(self):
+        c = Collector()
+        feed = self.make_feed(c)
+        snap = {"arg": {"channel": "books", "instId": "BTC-USDT-SWAP"},
+                "data": [{"action": "snapshot", "ts": 1000,
+                          "bids": [["100", "5"], ["99", "1"]], "asks": [["101", "2"]]}]}
+        await feed.handle_message(snap)
+        sym, bids, asks, _ = c.books[-1]
+        assert sym == "BTCUSDT" and bids[0] == (100.0, 5.0) and asks == [(101.0, 2.0)]
+        upd = {"arg": {"channel": "books", "instId": "BTC-USDT-SWAP"},
+               "data": [{"action": "update", "ts": 2000,
+                         "bids": [["100", "0"], ["98", "7"]], "asks": [["101", "3"]]}]}
+        await feed.handle_message(upd)
+        sym, bids, asks, _ = c.books[-1]
+        assert (100.0, 5.0) not in bids  # zero size removes
+        assert (98.0, 7.0) in bids and asks == [(101.0, 3.0)]
+
+    @pytest.mark.asyncio
+    async def test_trades_taker_side(self):
+        c = Collector()
+        feed = self.make_feed(c)
+        raw = {"arg": {"channel": "trades", "instId": "BTC-USDT-SWAP"},
+               "data": [{"instId": "BTC-USDT-SWAP", "ts": "1720000000000", "px": "100", "sz": "1", "side": "Buy"}]}
+        await feed.handle_message(raw)
+        assert c.trades[0] == ("BTCUSDT", 1720000000000.0, 100.0, 1.0, False)
+
+    @pytest.mark.asyncio
+    async def test_ticker_quote_volume(self):
+        c = Collector()
+        feed = self.make_feed(c)
+        raw = {"arg": {"channel": "tickers", "instId": "BTC-USDT-SWAP"},
+               "data": [{"last": "100", "open24h": "90", "volCcy24h": "1000"}]}
+        await feed.handle_message(raw)
+        assert c.tickers[0] == ("BTCUSDT", 100.0, pytest.approx(11.11, abs=0.01), 100000.0)
+
+    def test_inst_mapping(self):
+        assert inst_to_symbol("BTC-USDT-SWAP") == "BTCUSDT"
+
+    @pytest.mark.asyncio
+    async def test_malformed_never_raise(self):
+        c = Collector()
+        feed = self.make_feed(c)
+        for bad in [None, {"arg": {"channel": "books", "instId": "BTC-USDT-SWAP"}, "data": "x"}, {"arg": {}}, {}]:
+            await feed.handle_message(bad)

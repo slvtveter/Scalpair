@@ -1,0 +1,69 @@
+# Render Blueprint — Scalpair (one-command deploy)
+# Docs: https://render.com/docs/blueprint-spec
+# Deploy: push this repo to GitHub → Render Dashboard → New → Blueprint → select repo.
+# Or with the Render CLI:  render blueprint launch
+#
+# Free-tier notes: free web services sleep after 15 min idle and don't support
+# persistent disks — the SQLite file resets on redeploy (market data is in-memory
+# anyway; only users/alert rules reset). Set TOP_SYMBOLS=20 on free tier.
+
+services:
+  - type: web
+    name: scalpair-backend
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    plan: free # starter for always-on
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: DATA_FEED
+        value: auto
+      - key: TOP_SYMBOLS
+        value: "30" # 50 on paid plans
+      - key: ML_SCORE_INTERVAL
+        value: "15"
+      - key: WS_BROADCAST_RATE
+        value: "6"
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false # optional — set in dashboard, alerts stay in-app without it
+      - key: TELEGRAM_BOT_USERNAME
+        sync: false
+      - key: CORS_ORIGINS
+        value: https://scalpair-frontend.onrender.com
+
+  - type: web
+    name: scalpair-frontend
+    runtime: static
+    staticPublishPath: .
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://scalpair-backend.onrender.com/api/:splat
+      - type: rewrite
+        source: /api/v1/ws/*
+        destination: https://scalpair-backend.onrender.com/api/v1/ws/:splat
+    headers:
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Referrer-Policy
+        value: no-referrer
+    buildFilter:
+      paths:
+        - index.html
+        - css/**
+        - js/**
+
+# Redis is optional (in-memory fanout fallback works single-instance);
+# add on paid tiers:
+#   - type: redis
+#     name: scalpair-redis
+#     plan: free
+#     maxmemoryPolicy: allkeys-lru

@@ -21,6 +21,7 @@ from app.config import Settings
 from app.feeds.base import FeedCallbacks, FeedConnector
 from app.feeds.binance import BinanceFuturesFeed
 from app.feeds.bybit import BybitLinearFeed
+from app.feeds.okx import OkxSwapFeed
 from app.feeds.mock import MockFeed
 from app.ml_engine import ScalpScorer
 from app.state import MarketState
@@ -104,9 +105,11 @@ class MarketStreamer:
             return [binance]
         if mode == "bybit":
             return [bybit]
+        if mode == "okx":
+            return [OkxSwapFeed(callbacks)]
         if mode == "mock":
             return [MockFeed(callbacks)]
-        return [binance, bybit, MockFeed(callbacks)]  # auto
+        return [binance, bybit, OkxSwapFeed(callbacks), MockFeed(callbacks)]  # auto
 
     async def _select_feed(self) -> FeedConnector:
         for feed in self._candidate_feeds():
@@ -173,7 +176,7 @@ class MarketStreamer:
             await asyncio.sleep(self.RECOVERY_PROBE_S)
             if self._stop.is_set() or not isinstance(self.feed, MockFeed):
                 return
-            for make in (BinanceFuturesFeed, BybitLinearFeed):
+            for make in (BinanceFuturesFeed, BybitLinearFeed, OkxSwapFeed):
                 candidate = make(self._make_callbacks())
                 try:
                     probe = await asyncio.wait_for(candidate.fetch_universe(3), timeout=12)

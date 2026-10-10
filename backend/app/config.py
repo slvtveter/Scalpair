@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # --- Feed ---
     data_feed: Literal["auto", "binance", "bybit", "mock"] = "auto"
-    top_symbols: int = 30
+    top_symbols: int = 50
 
     # --- Server ---
     api_host: str = "0.0.0.0"

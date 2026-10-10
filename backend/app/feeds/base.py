@@ -167,7 +167,10 @@ class FeedConnector:
                 while True:
                     await asyncio.sleep(self.keepalive_interval)
                     with contextlib.suppress(Exception):
-                        await ws.send(json.dumps(self.keepalive_payload))  # type: ignore[arg-type]
+                        if hasattr(self, "_send_keepalive"):
+                            await self._send_keepalive(ws)  # venue-specific (e.g. OKX text ping)
+                        else:
+                            await ws.send(json.dumps(self.keepalive_payload))  # type: ignore[arg-type]
             pinger = asyncio.create_task(_pinger())
         done, _ = await asyncio.wait(
             {reader, stale, asyncio.ensure_future(self._stop.wait())},

@@ -1,8 +1,7 @@
 /* ============================================================
    SCALPAIR TERMINAL — vanilla JS, no build step
-   WS client · scanner table · trend sparklines · chart board 3×3
-   interactive candle chart (pan/zoom/TF) · hotlist · density radar
-   server alerts (bell + toasts) · watchlists · search · RU/EN
+   Слева: топ-сетапы + сканер · Справа: доска графиков
+   Интерактивный свечной график · серверные алерты · RU/EN
    ============================================================ */
 "use strict";
 
@@ -13,43 +12,41 @@ const RECONNECT_BASE_MS = 1000;
 const RECONNECT_MAX_MS = 15000;
 const STALE_BOOK_MS = 15000;
 
-// ------------------------- i18n (RU default per spec) -------------------------
+// ------------------------- i18n (RU default) -------------------------
 const I18N = {
   ru: {
-    scanner: "Сканер", hotlist: "AI Подборка", radar: "Радар плотностей", alerts: "Алерты",
-    ticker: "Тикер", price: "Цена", trend: "Тренд", ch5m: "5м %", natr: "NATR", speed: "Скорость",
-    vol1m: "Объём 1м", surge: "Всплеск", imb: "Стакан", wall: "Стена", dist: "Дист.",
-    fund: "Фанд.", level: "Уровень", score: "AI Скор", setup: "Сетап",
+    scanner: "Сканер", board: "Доска", topsetups: "Топ сетапы", alerts: "Алерты",
+    ticker: "Тикер", price: "Цена", trend: "Тренд", ch5m: "5м %", surge: "Всплеск",
+    imb: "Стакан", level: "Уровень", setup: "Сетап",
     waiting: "ожидание данных…", noMatch: "нет монет под фильтр", warmup: "движок считает…",
-    noSetups: "нет сетапов ≥ {n}", noAlerts: "алертов ещё нет", notifEmpty: "уведомлений нет",
+    noAlerts: "алертов ещё нет", notifEmpty: "уведомлений нет",
     signIn: "Войти", signUp: "Регистрация", email: "email", password: "пароль",
     createAlert: "Создать алерт", alertCreated: "Алертовое правило создано",
-    authNeeded: "Войдите (колокольчик), чтобы создавать алерты",
-    board: "Доска", table: "Таблица", stale: "stale",
+    authNeeded: "Войдите (Алерты), чтобы создавать правила",
+    table: "Таблица", stale: "stale",
     priceCrossAbove: "цена выше", priceCrossBelow: "цена ниже", pctMove: "движение %",
-    volumeSurge: "всплеск объёма", scoreAbove: "скоринг ≥",
+    volumeSurge: "всплеск объёма x", scoreAbove: "скоринг ≥",
     loginError: "Ошибка входа/регистрации", searchPh: "Поиск…",
+    resistance: "сопротивление", support: "поддержка", inside: "внутри зоны",
     close: "Закрыть", soundOn: "Звук вкл", soundOff: "Звук выкл",
     thresholdNeeded: "укажите порог", logout: "Выйти",
-    resistance: "сопротивление", support: "поддержка", inside: "внутри зоны",
   },
   en: {
-    scanner: "Scanner", hotlist: "AI Hotlist", radar: "Density Radar", alerts: "Alerts",
-    ticker: "Ticker", price: "Price", trend: "Trend", ch5m: "5m %", natr: "NATR", speed: "Speed",
-    vol1m: "1m Vol", surge: "Surge", imb: "Book Imb", wall: "Wall", dist: "Dist.",
-    fund: "Fund", level: "Level", score: "Score", setup: "Setup",
+    scanner: "Scanner", board: "Board", topsetups: "Top setups", alerts: "Alerts",
+    ticker: "Ticker", price: "Price", trend: "Trend", ch5m: "5m %", surge: "Surge",
+    imb: "Book Imb", level: "Level", setup: "Setup",
     waiting: "waiting for market data…", noMatch: "no symbols match filter", warmup: "scoring engine warming up…",
-    noSetups: "no setups ≥ {n}", noAlerts: "no alerts fired yet", notifEmpty: "no notifications yet",
+    noAlerts: "no alerts fired yet", notifEmpty: "no notifications yet",
     signIn: "Sign in", signUp: "Register", email: "email", password: "password",
     createAlert: "Create alert", alertCreated: "Alert rule created",
-    authNeeded: "Sign in (bell icon) to create alerts",
-    board: "Board", table: "Table", stale: "stale",
+    authNeeded: "Sign in (Alerts) to create rules",
+    table: "Table", stale: "stale",
     priceCrossAbove: "price above", priceCrossBelow: "price below", pctMove: "move %",
-    volumeSurge: "volume surge", scoreAbove: "score ≥",
+    volumeSurge: "volume surge x", scoreAbove: "score ≥",
     loginError: "Login/registration failed", searchPh: "Search…",
+    resistance: "resistance", support: "support", inside: "inside zone",
     close: "Close", soundOn: "Sound on", soundOff: "Sound off",
     thresholdNeeded: "set a threshold", logout: "Log out",
-    resistance: "resistance", support: "support", inside: "inside zone",
   },
 };
 const t = (k, vars) => {
@@ -75,13 +72,11 @@ const S = {
   maxHistory: 900,
   soundOn: LS.get("sound", false),
   minScore: LS.get("minScore", 0),
-  wallMin: 250000,
+  wallMin: LS.get("wallMin", 250000),
   sortKey: "score",
-  tickCounter: 0,
   msgTimes: [],
   lastAlertAt: new Map(),
   lang: LS.get("lang", "ru"),
-  view: LS.get("view", "table"),
   gridSize: LS.get("grid", 3),
   page: 0,
   search: "",
@@ -90,26 +85,28 @@ const S = {
   jwt: LS.get("jwt", null),
   candleCache: new Map(),
   notifLastId: LS.get("notifLastId", 0),
+  _toastedId: LS.get("notifLastId", 0),
+  _notifItems: [],
 };
 
 // ------------------------- ws client -------------------------
 let ws = null;
 let wsAttempt = 0;
 
-function setBadge(status) {
+function setFeedStatus(status) {
   const b = $("feed-badge");
-  b.className = "badge";
-  if (status === "live") { b.classList.add("badge-live"); b.textContent = `Live · ${S.feed.replace("-trades", "").toUpperCase()}`; }
-  else if (status === "reconnecting") { b.classList.add("badge-reconn"); b.textContent = "Reconnecting"; }
-  else { b.classList.add("badge-off"); b.textContent = "Connecting"; }
+  if (status === "live") { b.textContent = `· ${S.feed.replace("-trades", "").toUpperCase()}`; b.style.color = "var(--up)"; }
+  else if (status === "reconnecting") { b.textContent = "· переподключение"; b.style.color = "var(--warn)"; }
+  else { b.textContent = "· подключение"; b.style.color = "var(--text-3)"; }
+  $("set-feed").textContent = S.feed !== "—" ? S.feed : "—";
 }
 
 function connect() {
-  setBadge(wsAttempt === 0 ? "connecting" : "reconnecting");
+  setFeedStatus(wsAttempt === 0 ? "connecting" : "reconnecting");
   try { ws = new WebSocket(WS_PATH); } catch { scheduleReconnect(); return; }
   ws.onopen = () => {
     wsAttempt = 0;
-    setBadge("live");
+    setFeedStatus("live");
     ws.send(JSON.stringify({ type: "hello", token: S.jwt || undefined }));
   };
   ws.onmessage = (ev) => { S.msgTimes.push(performance.now()); try { onSnapshot(JSON.parse(ev.data)); } catch {} };
@@ -118,7 +115,7 @@ function connect() {
 }
 
 function scheduleReconnect() {
-  setBadge("reconnecting");
+  setFeedStatus("reconnecting");
   const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** Math.min(wsAttempt, 4));
   wsAttempt += 1;
   setTimeout(connect, delay + Math.random() * 400);
@@ -131,7 +128,6 @@ function onSnapshot(snap) {
   S.picks = snap.picks || [];
   S.alerts = snap.alerts || S.alerts;
   S.stats = snap.stats || {};
-  S.tickCounter += 1;
   for (const r of S.symbols) {
     if (r.price > 0) {
       let hist = S.priceHistory.get(r.symbol);
@@ -204,7 +200,6 @@ function fmtPct(v, digits = 2) {
   if (v === null || v === undefined || Number.isNaN(v)) return "—";
   return `${v > 0 ? "+" : ""}${v.toFixed(digits)}%`;
 }
-function fmtNum(v, digits = 2) { return v === null || v === undefined ? "—" : v.toFixed(digits); }
 function cls(v) { return v > 0 ? "up" : v < 0 ? "down" : "dim"; }
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -218,6 +213,8 @@ function tagClass(tag) {
   if (tag.includes("Volume") || tag.includes("Momentum") || tag.includes("Funding")) return "tag-volume";
   return "tag-quiet";
 }
+function isStale(r) { return r.bookTs && Date.now() - r.bookTs > STALE_BOOK_MS; }
+
 function scoreClass(score) {
   if (score == null) return "sc-ice";
   if (score >= 85) return "sc-blaze";
@@ -225,13 +222,12 @@ function scoreClass(score) {
   if (score >= 40) return "sc-warm";
   return "sc-ice";
 }
-function isStale(r) { return r.bookTs && Date.now() - r.bookTs > STALE_BOOK_MS; }
 
-// ------------------------- main table -------------------------
+// ------------------------- scanner table -------------------------
 const tbody = $("table-body");
 const rowMap = new Map();
 
-const TH_KEYS = ["symbol", "price", null, "change5m", "natr", "speed", "vol1m", "surge", null, "wall", null, null, "level", "score", "tag"];
+const TH_KEYS = ["symbol", "price", null, "change5m", "surge", null, "level", "tag"];
 
 function updateSortIndicator() {
   document.querySelectorAll("#main-table thead th").forEach((th, i) => {
@@ -248,32 +244,22 @@ function visibleRows() {
   if (S.search) rows = rows.filter((r) => r.symbol.includes(S.search.toUpperCase()));
   if ($("watch-only")?.checked) rows = rows.filter((r) => S.watch.has(r.symbol));
   rows = rows.filter((r) => (r.score ?? 0) >= S.minScore);
-  rows = [...rows].sort((a, b) => {
+  return [...rows].sort((a, b) => {
     switch (S.sortKey) {
       case "symbol": return a.symbol.localeCompare(b.symbol);
       case "price": return (b.price ?? 0) - (a.price ?? 0);
       case "change5m": return (b.change5m ?? 0) - (a.change5m ?? 0);
-      case "vol1m": return (b.vol1m ?? 0) - (a.vol1m ?? 0);
       case "surge": return (b.surge ?? 0) - (a.surge ?? 0);
-      case "natr": case "speed": case "level": {
-        const key = S.sortKey === "level" ? "levelDist" : S.sortKey;
-        const av = a[key], bv = b[key];
+      case "level": {
+        const av = a.levelDist, bv = b.levelDist;
         return (av ?? Infinity) - (bv ?? Infinity);
       }
-      case "wall": return (b.walls?.[0]?.notional ?? 0) - (a.walls?.[0]?.notional ?? 0);
       default: return (b.score ?? -1) - (a.score ?? -1);
     }
   });
-  return rows;
-}
-
-function bestWall(r) {
-  if (!r.walls || !r.walls.length) return null;
-  return r.walls.find((w) => w.notional >= S.wallMin) || r.walls[0] || null;
 }
 
 function renderTable() {
-  if (S.view !== "table") return;
   const rows = visibleRows();
   $("table-empty").style.display = rows.length ? "none" : "";
   $("table-empty").textContent = rows.length ? "" : (S.symbols.length ? t("noMatch") : t("waiting"));
@@ -286,7 +272,7 @@ function renderTable() {
       tr = document.createElement("tr");
       tr.tabIndex = 0;
       tr.setAttribute("role", "button");
-      tr.setAttribute("aria-label", `SCALP view: ${r.symbol}`);
+      tr.setAttribute("aria-label", `SCALP: ${r.symbol}`);
       tr.onclick = () => openChart(r.symbol);
       tr.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openChart(r.symbol); } };
       rowMap.set(r.symbol, tr);
@@ -294,27 +280,21 @@ function renderTable() {
     }
     tr.className = (r.score ?? 0) >= 85 ? "row-hot" : "";
 
-    const wall = bestWall(r);
     const imb = r.imbalance ?? 0;
     const imbW = Math.min(Math.abs(imb) * 50, 50);
-    const sc = scoreClass(r.score);
     const star = S.watch.has(r.symbol) ? "★" : "☆";
     const staleChip = isStale(r) ? ` <span class="tile-stale">${t("stale")}</span>` : "";
+    const levelTxt = r.levelDist != null
+      ? `${r.levelDist.toFixed(2)}% ${r.levelKind === "resistance" ? "↑" : r.levelKind === "support" ? "↓" : "◎"}`
+      : "—";
     const cells = [
       `<td class="col-sym sym-cell"><span class="star" data-star="${esc(r.symbol)}" title="watchlist">${star}</span> ${esc(r.symbol)}<small>${r.tps != null ? `${r.tps.toFixed(1)} tps` : ""}${staleChip}</small></td>`,
       `<td class="mono">${fmtPrice(r.price)}</td>`,
       `<td class="col-trend spark-cell"><canvas class="spark" width="110" height="26"></canvas></td>`,
       `<td class="mono ${cls(r.change5m)}">${fmtPct(r.change5m)}</td>`,
-      `<td class="mono">${fmtNum(r.natr)}</td>`,
-      `<td class="mono ${cls(r.speed)}">${fmtNum(r.speed)}</td>`,
-      `<td class="mono dim">${fmtUsd(r.vol1m)}</td>`,
       `<td class="mono ${cls(r.surge - 1)}">${r.surge != null ? `${r.surge.toFixed(1)}x` : "—"}</td>`,
       `<td class="col-imb"><span class="imb-val mono">${imb >= 0 ? "+" : ""}${imb.toFixed(2)}</span><div class="imb-meter"><div class="imb-fill ${imb >= 0 ? "bid" : "ask"}" style="width:${imbW}%"></div></div></td>`,
-      `<td class="mono ${wall ? (wall.side === "bid" ? "up" : "down") : "dim"}">${wall ? fmtUsd(wall.notional) : "—"}</td>`,
-      `<td class="mono dim">${wall ? `${Math.abs(wall.distance).toFixed(2)}% ${wall.side === "bid" ? "↓" : "↑"}` : "—"}</td>`,
-      `<td class="mono ${cls((r.funding ?? 0) * -1)}">${r.funding != null ? `${r.funding > 0 ? "+" : ""}${(r.funding * 100).toFixed(1)}bp` : "—"}</td>`,
-      `<td class="mono ${r.levelDist === 0 ? "up" : "dim"}">${r.levelDist != null ? `${r.levelDist.toFixed(2)}% ${r.levelKind === "resistance" ? "↑" : r.levelKind === "support" ? "↓" : "◎"}` : "—"}</td>`,
-      `<td class="score-cell"><span class="score-num ${sc}">${r.score != null ? r.score.toFixed(0) : "—"}</span><span class="score-bar"><i class="${sc}" style="width:${r.score ?? 0}%"></i></span></td>`,
+      `<td class="mono ${r.levelDist === 0 ? "up" : "dim"}">${levelTxt}</td>`,
       `<td class="col-tag"><span class="tag-cell ${tagClass(r.tag)}">${esc(r.tag ?? "—")}</span></td>`,
     ];
     if (tr._sig !== cells.join("|")) { tr.innerHTML = cells.join(""); tr._sig = cells.join("|"); }
@@ -381,123 +361,187 @@ function drawSparks() {
   }
 }
 
-// ------------------------- hotlist -------------------------
-let _hotlistSig = "";
-function renderHotlist() {
-  const el = $("hotlist-body");
-  const picks = S.picks.filter((p) => p.score >= S.minScore);
-  $("hotlist-mode").textContent = picks.length ? `TOP ${picks.length}` : "TOP 5";
+// ------------------------- top setups (slim strip) -------------------------
+let _topSig = "";
+function renderTopSetups() {
+  const el = $("topsetups-body");
+  const picks = S.picks.filter((p) => p.tag !== "Quiet — Watch" && p.score >= Math.max(S.minScore, 50));
   if (!S.picks.length) { setIfChanged(el, `<div class="empty-note">${t("warmup")}</div>`); return; }
-  if (!picks.length) { setIfChanged(el, `<div class="empty-note">${t("noSetups", { n: S.minScore })}</div>`); return; }
-  const html = picks.map((p) => `
-    <div class="pick" data-sym="${esc(p.symbol)}" tabindex="0" role="button" aria-label="SCALP view: ${esc(p.symbol)}">
-      <div class="pick-top">
-        <span class="pick-sym">${esc(p.symbol)}<span class="price mono">${fmtPrice(p.price)}</span></span>
-        <span class="score-num ${scoreClass(p.score)}">${p.score.toFixed(0)}</span>
-      </div>
-      <div class="pick-meta">
-        <span class="tag-cell ${tagClass(p.tag)}">${esc(p.tag)}</span>
-        <span>anomaly ${p.anomaly?.toFixed(0) ?? "—"} · heuristic ${p.heuristic?.toFixed(0) ?? "—"}</span>
-      </div>
-      <div class="pick-thesis">${esc(p.thesis)}</div>
-      <div class="pick-scorebar"><div style="width:${p.score}%"></div></div>
-    </div>`).join("");
-  if (html !== _hotlistSig) { _hotlistSig = html; el.innerHTML = html; }
+  if (!picks.length) { setIfChanged(el, `<div class="empty-note">${t("noMatch")}</div>`); return; }
+  const html = picks.slice(0, 3).map((p) => {
+    const reason = (p.thesis || "").replace(/^[^:]+:\s*/, "").split(";")[0];
+    return `
+    <div class="ts-row" data-sym="${esc(p.symbol)}" tabindex="0" role="button" aria-label="SCALP: ${esc(p.symbol)}">
+      <span class="ts-sym">${esc(p.symbol)}</span>
+      <span class="mono tp">${fmtPrice(p.price)}</span>
+      <span class="mono ${cls(p.surge - 1)}">${p.surge != null ? `${p.surge.toFixed(1)}x` : ""}</span>
+      <span class="tag-cell ${tagClass(p.tag)}">${esc(p.tag)}</span>
+      <span class="ts-reason">${esc(reason)}</span>
+      <span class="score-num ${scoreClass(p.score)}">${p.score.toFixed(0)}</span>
+    </div>`;
+  }).join("");
+  if (html !== _topSig) { _topSig = html; el.innerHTML = html; }
 }
+$("topsetups-body").addEventListener("click", (e) => {
+  const row = e.target.closest(".ts-row");
+  if (row) openChart(row.dataset.sym);
+});
+$("topsetups-body").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" && e.key !== " ") return;
+  const row = e.target.closest(".ts-row");
+  if (row) { e.preventDefault(); openChart(row.dataset.sym); }
+});
+
 function setIfChanged(el, html) {
   if (el._sig !== html) { el._sig = html; el.innerHTML = html; }
 }
-$("hotlist-body").addEventListener("keydown", (e) => {
-  const card = e.target.closest(".pick");
-  if (card && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openChart(card.dataset.sym); }
+
+// ------------------------- alerts feed (bell) -------------------------
+async function api(path, opts = {}) {
+  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
+  if (S.jwt) headers.Authorization = `Bearer ${S.jwt}`;
+  return fetch(path, { ...opts, headers });
+}
+
+async function pollNotifications() {
+  if (!S.jwt) { renderNotifPanel([]); return; }
+  try {
+    const res = await api("/api/v1/notifications");
+    if (!res.ok) return;
+    const body = await res.json();
+    // toasts fire for genuinely new items; the unread badge only clears when
+    // the panel is opened (notifLastId is updated there, not here)
+    const fresh = body.notifications.filter((n) => n.id > S._toastedId);
+    if (fresh.length) {
+      for (const n of fresh.slice(0, 3)) toast(n.message, "warn");
+      S._toastedId = Math.max(...body.notifications.map((n) => n.id));
+    }
+    renderNotifPanel(body.notifications);
+  } catch {}
+}
+setInterval(pollNotifications, 8000);
+
+function renderNotifPanel(items) {
+  const el = $("notif-panel");
+  if (items) S._notifItems = items;
+  const all = S._notifItems || [];
+  const unread = all.filter((n) => n.id > S.notifLastId).length;
+  $("bell-count").textContent = unread;
+  $("bell-count").classList.toggle("hidden", !unread);
+  if (el.classList.contains("hidden")) return;
+  if (!S.jwt) {
+    el.innerHTML = `
+      <div class="notif-item"><b>${t("signIn")}</b><br/>
+        <input id="nl-email" class="nl-input" placeholder="${t("email")}" />
+        <input id="nl-pass" class="nl-input" type="password" placeholder="${t("password")}" />
+        <div style="display:flex;gap:6px;margin-top:6px;">
+          <button id="nl-login" class="ctl ctl-btn">${t("signIn")}</button>
+          <button id="nl-register" class="ctl ctl-btn">${t("signUp")}</button>
+        </div>
+      </div>`;
+    $("nl-login").onclick = () => authFlow("/api/v1/auth/login");
+    $("nl-register").onclick = () => authFlow("/api/v1/auth/register");
+    return;
+  }
+  el.innerHTML = all.length
+    ? all.map((n) => `
+      <div class="notif-item"><b>${esc(n.symbol)}</b> ${esc(n.message)}
+        <div class="delivery">${new Date(n.ts * 1000).toLocaleTimeString()} · ${esc(n.delivery.join(", "))}</div>
+      </div>`).join("")
+    : `<div class="notif-empty">${t("notifEmpty")}</div>`;
+  el.innerHTML += `<div class="notif-actions"><button id="nl-logout" class="ctl ctl-btn">${t("logout")}</button></div>`;
+  const lo = $("nl-logout");
+  if (lo) lo.onclick = () => {
+    S.jwt = null;
+    LS.set("jwt", null);
+    S.notifLastId = 0;
+    LS.set("notifLastId", 0);
+    S._notifItems = [];
+    renderNotifPanel([]);
+    if (ws) ws.close();  // reconnects honestly at the public tier
+  };
+}
+
+async function authFlow(path) {
+  try {
+    const res = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: $("nl-email").value, password: $("nl-pass").value }),
+    });
+    if (!res.ok) { toast(t("loginError"), "err"); return; }
+    if (path.endsWith("login")) {
+      const body = await res.json();
+      S.jwt = body.access_token;
+      LS.set("jwt", S.jwt);
+      toast("✓ " + t("signIn"));
+      if (ws) ws.close();  // reconnect carries the token → full feed immediately
+      pollNotifications();
+    } else {
+      toast("✓ " + t("signUp"));
+      await authFlow("/api/v1/auth/login");
+    }
+  } catch { toast(t("loginError"), "err"); }
+}
+
+$("bell").addEventListener("click", () => {
+  const panel = $("notif-panel");
+  panel.classList.toggle("hidden");
+  $("settings-menu").classList.add("hidden");
+  if (!panel.classList.contains("hidden") && S._notifItems?.length) {
+    S.notifLastId = Math.max(...S._notifItems.map((n) => n.id));
+    LS.set("notifLastId", S.notifLastId);
+    renderNotifPanel(S._notifItems);
+  } else {
+    renderNotifPanel([]);
+  }
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("#notif-panel") && !e.target.closest("#bell")) $("notif-panel").classList.add("hidden");
+  if (!e.target.closest("#settings-menu") && !e.target.closest("#burger")) $("settings-menu").classList.add("hidden");
 });
 
-// ------------------------- alerts feed panel -------------------------
-let _alertsSig = "";
-function renderAlerts() {
-  const el = $("alerts-body");
-  $("alert-count").textContent = S.alerts.length;
-  const html = S.alerts.length
-    ? [...S.alerts].reverse().map((a) => `
-      <div class="alert-item"><b>${esc(a.symbol)}</b> ${a.score?.toFixed(0)} · ${esc(a.tag)}<br/>
-      <span class="dim">${new Date(a.ts).toLocaleTimeString()} — ${esc(a.thesis ?? "")}</span></div>`).join("")
-    : `<div class="empty-note">${t("noAlerts")}</div>`;
-  setIfChanged(el, html);
-}
+$("alert-create").addEventListener("click", async () => {
+  if (!S.jwt) { toast(t("authNeeded"), "warn"); $("notif-panel").classList.remove("hidden"); renderNotifPanel([]); return; }
+  const body = {
+    symbol: chartSym,
+    rule_type: $("alert-type").value,
+    threshold: parseFloat($("alert-threshold").value),
+    cooldown_s: 300,
+    recurring: true,
+  };
+  if (!body.threshold || body.threshold <= 0) { toast(t("thresholdNeeded"), "err"); return; }
+  const res = await api("/api/v1/alerts", { method: "POST", body: JSON.stringify(body) });
+  toast(res.ok ? `✓ ${t("alertCreated")}` : `${res.status}`, res.ok ? "" : "err");
+});
 
-// ------------------------- ticker strip -------------------------
-let _tickerSig = "";
-function renderTicker() {
-  const items = S.symbols.slice(0, 18);
-  if (!items.length) return;
-  const html = items.map((r) => `
-    <span class="tk"><b>${esc(r.symbol.replace("USDT", ""))}</b>
-    <span class="dim">${fmtPrice(r.price)}</span>
-    <span class="${cls(r.change24h)}">${fmtPct(r.change24h, 1)}</span></span>`).join("");
-  setIfChanged($("ticker-track"), html + html);
-}
-
-// ------------------------- density radar -------------------------
-const radar = $("radar-canvas");
-
-function fitCanvas(cv, logicalH) {
-  const dpr = window.devicePixelRatio || 1;
-  const cssW = Math.max(200, cv.clientWidth || cv.width / dpr);
-  const bw = Math.round(cssW * dpr), bh = Math.round(logicalH * dpr);
-  if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
-  const ctx = cv.getContext("2d");
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return { ctx, W: cssW, H: logicalH };
-}
-
-function drawRadar() {
-  const { ctx: rctx, W, H } = fitCanvas(radar, 300);
-  rctx.clearRect(0, 0, W, H);
-  rctx.fillStyle = "#13161a";
-  rctx.fillRect(0, 0, W, H);
-  rctx.strokeStyle = "#1e232a";
-  rctx.lineWidth = 1;
-  rctx.font = "9px 'JetBrains Mono', monospace";
-  rctx.fillStyle = "#626b77";
-  const distRange = 2.0;
-  for (let d = -2; d <= 2; d += 0.5) {
-    const x = ((d + distRange) / (2 * distRange)) * (W - 40) + 30;
-    rctx.beginPath();
-    rctx.moveTo(x, 10); rctx.lineTo(x, H - 24);
-    rctx.stroke();
-    if (Number.isInteger(d * 2)) rctx.fillText(`${d > 0 ? "+" : ""}${d}%`, x - 10, H - 10);
+// ------------------------- burger settings -------------------------
+$("burger").addEventListener("click", () => {
+  const menu = $("settings-menu");
+  menu.classList.toggle("hidden");
+  $("notif-panel").classList.add("hidden");
+  if (!menu.classList.contains("hidden")) {
+    $("set-feed").textContent = `${S.feed} · ${S.stats.tracked ?? 0} симв.`;
   }
-  for (const m of [0.25, 1, 4, 16]) {
-    const y = H - 34 - (Math.log10(m * 1e6) / Math.log10(5e7)) * (H - 60);
-    if (y < 10 || y > H - 24) continue;
-    rctx.beginPath(); rctx.moveTo(30, y); rctx.lineTo(W - 10, y); rctx.stroke();
-    rctx.fillText(`$${m}M`, 2, y + 3);
-  }
-  const x0 = 30 + 0.5 * (W - 40);
-  rctx.strokeStyle = "#262d36";
-  rctx.beginPath(); rctx.moveTo(x0, 10); rctx.lineTo(x0, H - 24); rctx.stroke();
-  for (const r of S.symbols) {
-    for (const w of r.walls || []) {
-      if (w.notional < S.wallMin) continue;
-      const dist = Math.max(-distRange, Math.min(distRange, w.distance));
-      const x = ((dist + distRange) / (2 * distRange)) * (W - 40) + 30;
-      const nlog = Math.max(0, Math.min(1, Math.log10(Math.max(w.notional, 1e5)) / Math.log10(5e7)));
-      const y = H - 34 - nlog * (H - 60);
-      const rad = 2 + 3.5 * nlog;
-      rctx.beginPath();
-      rctx.arc(x, y, rad, 0, Math.PI * 2);
-      rctx.fillStyle = w.side === "bid" ? "#31976b" : "#c95d63";
-      rctx.globalAlpha = 0.85;
-      rctx.fill();
-      rctx.globalAlpha = 1;
-      rctx.fillStyle = w.side === "bid" ? "#31976b" : "#c95d63";
-      rctx.font = "8px 'JetBrains Mono', monospace";
-      rctx.fillText(r.symbol.replace("USDT", ""), x + rad + 2, y + 3);
-    }
-  }
-}
+});
 
-// ------------------------- chart board (grid mode) -------------------------
+$("sound-toggle").addEventListener("click", (e) => {
+  S.soundOn = !S.soundOn;
+  LS.set("sound", S.soundOn);
+  e.target.textContent = S.soundOn ? t("soundOn") : t("soundOff");
+  if (S.soundOn) ping();
+});
+$("lang-toggle").addEventListener("click", (e) => {
+  S.lang = S.lang === "ru" ? "en" : "ru";
+  LS.set("lang", S.lang);
+  e.target.textContent = S.lang === "ru" ? "RU" : "EN";
+  applyI18n();
+});
+$("min-score").addEventListener("change", (e) => { S.minScore = +e.target.value; LS.set("minScore", S.minScore); renderTable(); renderTopSetups(); renderBoard(); });
+$("wall-filter").addEventListener("change", (e) => { S.wallMin = +e.target.value; LS.set("wallMin", S.wallMin); renderTable(); });
+$("search").addEventListener("input", (e) => { S.search = e.target.value.trim(); renderTable(); });
+
+// ------------------------- chart board (right rail) -------------------------
 async function getCandles(sym) {
   const cached = S.candleCache.get(sym);
   if (cached && Date.now() - cached.ts < 60000) return cached.candles;
@@ -565,7 +609,7 @@ function paintMini(cv, candles, livePrice) {
 }
 
 function boardPages() {
-  const rows = visibleRows(); // same filters as the table: search, watch-only, score, hidden
+  const rows = visibleRows(); // same filters as the table: search, watch, score, hidden
   const per = S.gridSize * S.gridSize;
   const pages = Math.max(1, Math.ceil(rows.length / per));
   S.page = Math.min(S.page, pages - 1);
@@ -574,7 +618,6 @@ function boardPages() {
 
 let _boardSig = "";
 function renderBoard() {
-  if (S.view !== "board") return;
   const grid = $("board-grid");
   const { slice, pages } = boardPages();
   $("page-ind").textContent = `${S.page + 1}/${pages}`;
@@ -585,11 +628,10 @@ function renderBoard() {
   if (sig !== _boardSig) {
     _boardSig = sig;
     grid.innerHTML = slice.map((r) => `
-      <div class="board-tile" data-sym="${esc(r.symbol)}" tabindex="0" role="button" aria-label="SCALP view: ${esc(r.symbol)}">
+      <div class="board-tile" data-sym="${esc(r.symbol)}" tabindex="0" role="button" aria-label="SCALP: ${esc(r.symbol)}">
         <div class="tile-head">
           <span><span class="star ${S.watch.has(r.symbol) ? "on" : ""}" data-star="${esc(r.symbol)}">${S.watch.has(r.symbol) ? "★" : "☆"}</span> <b>${esc(r.symbol)}</b> <span class="tp">${fmtPrice(r.price)}</span></span>
           <span class="tc ${cls(r.change5m)}">${fmtPct(r.change5m, 1)}</span>
-          <span class="score">${r.score != null ? r.score.toFixed(0) : "—"}</span>
         </div>
         <div class="tile-canvas-wrap"><canvas></canvas></div>
       </div>`).join("");
@@ -632,6 +674,9 @@ $("board-grid").addEventListener("keydown", (e) => {
   const tile = e.target.closest(".board-tile");
   if (tile) { e.preventDefault(); openChart(tile.dataset.sym); }
 });
+$("grid-size").addEventListener("change", (e) => { S.gridSize = +e.target.value; LS.set("grid", S.gridSize); S.page = 0; _boardSig = ""; renderBoard(); });
+$("page-prev").addEventListener("click", () => { if (S.page > 0) { S.page -= 1; _boardSig = ""; renderBoard(); } });
+$("page-next").addEventListener("click", () => { S.page += 1; _boardSig = ""; renderBoard(); });
 setInterval(renderBoard, 2000);
 
 // ------------------------- chart modal (interactive candles) -------------------------
@@ -910,170 +955,21 @@ function drawChart() {
   ctx.textAlign = "left";
 }
 
-// ------------------------- notifications + alerts CRUD -------------------------
-async function api(path, opts = {}) {
-  const headers = { "Content-Type": "application/json", ...(opts.headers || {}) };
-  if (S.jwt) headers.Authorization = `Bearer ${S.jwt}`;
-  return fetch(path, { ...opts, headers });
+function fitCanvas(cv, logicalH) {
+  const dpr = window.devicePixelRatio || 1;
+  const cssW = Math.max(200, cv.clientWidth || cv.width / dpr);
+  const bw = Math.round(cssW * dpr), bh = Math.round(logicalH * dpr);
+  if (cv.width !== bw || cv.height !== bh) { cv.width = bw; cv.height = bh; }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx, W: cssW, H: logicalH };
 }
 
-async function pollNotifications() {
-  if (!S.jwt) { renderNotifPanel([]); return; }
-  try {
-    const res = await api("/api/v1/notifications");
-    if (!res.ok) return;
-    const body = await res.json();
-    // toasts fire for genuinely new items; the unread badge only clears when
-    // the bell panel is opened (notifLastId is updated there, not here)
-    S._toastedId = S._toastedId ?? S.notifLastId;
-    const fresh = body.notifications.filter((n) => n.id > S._toastedId);
-    if (fresh.length) {
-      for (const n of fresh.slice(0, 3)) toast(n.message, "warn");
-      S._toastedId = Math.max(...body.notifications.map((n) => n.id));
-    }
-    renderNotifPanel(body.notifications);
-  } catch {}
-}
-setInterval(pollNotifications, 8000);
-
-function renderNotifPanel(items) {
-  const el = $("notif-panel");
-  if (items) S._notifItems = items;
-  const all = S._notifItems || [];
-  const unread = all.filter((n) => n.id > S.notifLastId).length;
-  $("bell-count").textContent = unread;
-  $("bell-count").classList.toggle("hidden", !unread);
-  if (el.classList.contains("hidden")) return;
-  if (!S.jwt) {
-    el.innerHTML = `
-      <div class="notif-item"><b>${t("signIn")}</b><br/>
-        <input id="nl-email" class="nl-input" placeholder="${t("email")}" />
-        <input id="nl-pass" class="nl-input" type="password" placeholder="${t("password")}" />
-        <div style="display:flex;gap:6px;margin-top:6px;">
-          <button id="nl-login" class="ctl ctl-btn">${t("signIn")}</button>
-          <button id="nl-register" class="ctl ctl-btn">${t("signUp")}</button>
-        </div>
-      </div>`;
-    $("nl-login").onclick = () => authFlow("/api/v1/auth/login");
-    $("nl-register").onclick = () => authFlow("/api/v1/auth/register");
-    return;
-  }
-  el.innerHTML = all.length
-    ? all.map((n) => `
-      <div class="notif-item"><b>${esc(n.symbol)}</b> ${esc(n.message)}
-        <div class="delivery">${new Date(n.ts * 1000).toLocaleTimeString()} · ${esc(n.delivery.join(", "))}</div>
-      </div>`).join("")
-    : `<div class="notif-empty">${t("notifEmpty")}</div>`;
-  el.innerHTML += `<div class="notif-actions"><button id="nl-logout" class="ctl ctl-btn">${t("logout")}</button></div>`;
-  const lo = $("nl-logout");
-  if (lo) lo.onclick = () => {
-    S.jwt = null;
-    LS.set("jwt", null);
-    S.notifLastId = 0;
-    LS.set("notifLastId", 0);
-    S._notifItems = [];
-    renderNotifPanel([]);
-    if (ws) ws.close();  // reconnects honestly at the public tier
-  };
-}
-
-async function authFlow(path) {
-  try {
-    const res = await fetch(path, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: $("nl-email").value, password: $("nl-pass").value }),
-    });
-    if (!res.ok) { toast(t("loginError"), "err"); return; }
-    if (path.endsWith("login")) {
-      const body = await res.json();
-      S.jwt = body.access_token;
-      LS.set("jwt", S.jwt);
-      toast("✓ " + t("signIn"));
-      if (ws) ws.close();  // reconnect carries the token → pro tier immediately
-      pollNotifications();
-    } else {
-      toast("✓ " + t("signUp"));
-      await authFlow("/api/v1/auth/login");
-    }
-  } catch { toast(t("loginError"), "err"); }
-}
-
-$("bell").addEventListener("click", () => {
-  const panel = $("notif-panel");
-  panel.classList.toggle("hidden");
-  if (!panel.classList.contains("hidden") && S._notifItems?.length) {
-    S.notifLastId = Math.max(...S._notifItems.map((n) => n.id));
-    LS.set("notifLastId", S.notifLastId);
-    renderNotifPanel(S._notifItems);
-  } else {
-    renderNotifPanel([]);
-  }
-});
-document.addEventListener("click", (e) => {
-  if (!e.target.closest("#notif-panel") && !e.target.closest("#bell")) $("notif-panel").classList.add("hidden");
-});
-
-$("alert-create").addEventListener("click", async () => {
-  if (!S.jwt) { toast(t("authNeeded"), "warn"); $("notif-panel").classList.remove("hidden"); renderNotifPanel([]); return; }
-  const body = {
-    symbol: chartSym,
-    rule_type: $("alert-type").value,
-    threshold: parseFloat($("alert-threshold").value),
-    cooldown_s: 300,
-    recurring: true,
-  };
-  if (!body.threshold || body.threshold <= 0) { toast(t("thresholdNeeded"), "err"); return; }
-  const res = await api("/api/v1/alerts", { method: "POST", body: JSON.stringify(body) });
-  toast(res.ok ? `✓ ${t("alertCreated")}` : `${res.status}`, res.ok ? "" : "err");
-});
-
-// ------------------------- control wiring -------------------------
-$("min-score").addEventListener("change", (e) => { S.minScore = +e.target.value; LS.set("minScore", S.minScore); renderTable(); renderHotlist(); renderBoard(); });
-$("wall-filter").addEventListener("change", (e) => { S.wallMin = +e.target.value; drawRadar(); renderTable(); });
-$("sound-toggle").addEventListener("click", (e) => {
-  S.soundOn = !S.soundOn;
-  LS.set("sound", S.soundOn);
-  e.target.classList.toggle("on", S.soundOn);
-  e.target.textContent = S.soundOn ? t("soundOn") : t("soundOff");
-  if (S.soundOn) ping();
-});
-$("lang-toggle").textContent = S.lang === "ru" ? "RU" : "EN";
-$("lang-toggle").addEventListener("click", (e) => {
-  S.lang = S.lang === "ru" ? "en" : "ru";
-  LS.set("lang", S.lang);
-  e.target.textContent = S.lang === "ru" ? "RU" : "EN";
-  applyI18n();
-});
-$("search").addEventListener("input", (e) => { S.search = e.target.value.trim(); renderTable(); });
-$("view-toggle").addEventListener("click", () => {
-  S.view = S.view === "table" ? "board" : "table";
-  LS.set("view", S.view);
-  applyView();
-});
-$("grid-size").addEventListener("change", (e) => { S.gridSize = +e.target.value; LS.set("grid", S.gridSize); S.page = 0; _boardSig = ""; renderBoard(); });
-$("page-prev").addEventListener("click", () => { if (S.page > 0) { S.page -= 1; _boardSig = ""; renderBoard(); } });
-$("page-next").addEventListener("click", () => { S.page += 1; _boardSig = ""; renderBoard(); });
-$("watch-only").addEventListener("change", () => renderTable());
-
-function applyView() {
-  const board = S.view === "board";
-  $("board-panel").classList.toggle("hidden", !board);
-  $("table-panel").classList.toggle("hidden", board);
-  $("view-toggle").classList.toggle("active", board);
-  $("view-toggle").textContent = board ? t("table") : t("board");
-  $("grid-size").style.display = board ? "" : "none";
-  $("page-prev").style.display = board ? "" : "none";
-  $("page-next").style.display = board ? "" : "none";
-  $("page-ind").style.display = board ? "" : "none";
-  if (board) { _boardSig = ""; renderBoard(); }
-  else renderTable();
-}
-
+// ------------------------- i18n -------------------------
 function applyI18n() {
   document.documentElement.lang = S.lang;
   const ths = document.querySelectorAll("#main-table thead th");
-  const names = ["ticker", "price", "trend", "ch5m", "natr", "speed", "vol1m", "surge", "imb", "wall", "dist", "fund", "level", "score", "setup"];
+  const names = ["ticker", "price", "trend", "ch5m", "surge", "imb", "level", "setup"];
   ths.forEach((th, i) => {
     if (!names[i]) return;
     const hint = th.querySelector(".hint-inline");
@@ -1081,12 +977,10 @@ function applyI18n() {
     if (hint) th.appendChild(hint);
   });
   $("h2-scanner").textContent = t("scanner");
-  $("h2-hotlist").textContent = t("hotlist");
-  $("h2-radar").textContent = t("radar");
-  $("h2-alerts").textContent = t("alerts");
+  $("h2-board").textContent = t("board");
+  $("h2-topsetups").textContent = t("topsetups");
   $("search").placeholder = t("searchPh");
   $("table-empty").textContent = S.symbols.length ? t("noMatch") : t("waiting");
-  $("view-toggle").textContent = S.view === "board" ? t("table") : t("board");
   $("board-empty").textContent = t("waiting");
   $("chart-close").textContent = t("close");
   $("sound-toggle").textContent = S.soundOn ? t("soundOn") : t("soundOff");
@@ -1098,17 +992,16 @@ function applyI18n() {
   const prevSel = typeSel.value;
   typeSel.innerHTML = ruleKeys.map((k, i) => `<option value="${ruleVals[i]}">${t(k)}</option>`).join("");
   typeSel.value = prevSel;
+  _topSig = ""; renderTopSetups();
 }
 
 // ------------------------- boot -------------------------
 $("min-score").value = String(S.minScore);
-$("sound-toggle").classList.toggle("on", S.soundOn);
-$("sound-toggle").textContent = S.soundOn ? t("soundOn") : t("soundOff");
+$("wall-filter").value = String(S.wallMin);
 $("grid-size").value = String(S.gridSize);
+$("sound-toggle").textContent = S.soundOn ? t("soundOn") : t("soundOff");
+$("lang-toggle").textContent = S.lang === "ru" ? "RU" : "EN";
 
-renderTicker();
-setInterval(renderTicker, 2000);
-applyView();
 applyI18n();
 updateSortIndicator();
 pollNotifications();
@@ -1119,21 +1012,9 @@ setInterval(() => { $("clock").textContent = new Date().toISOString().slice(11, 
 function renderLoop() {
   renderTable();
   drawSparks();
-  renderHotlist();
-  renderAlerts();
-  drawRadar();
+  renderTopSetups();
+  renderBoard();
   drawChart();
-  const cutoff = performance.now() - 1000;
-  while (S.msgTimes.length && S.msgTimes[0] < cutoff) S.msgTimes.shift();
-  $("msgrate-val").textContent = S.msgTimes.length;
-  $("symbols-val").textContent = S.symbols.length;
-  $("latency-val").textContent = S.stats.latencyMs != null ? `${S.stats.latencyMs}ms` : "—";
-  $("foot-stats").textContent =
-    `feed: ${S.feed} · tracked: ${S.stats.tracked ?? 0} · ingested: ${(S.stats.ingested ?? 0).toLocaleString()} · score ≥ ${S.minScore}`;
-  if (ws && ws.readyState === 1 && S.feed !== "—") {
-    const b = $("feed-badge");
-    if (b.classList.contains("badge-live")) b.textContent = `Live · ${S.feed.replace("-trades", "").toUpperCase()}`;
-  }
 }
 
 connect();

@@ -42,3 +42,18 @@ This file records what is genuinely implemented versus what remains, per the spe
 3. Chart board grid (1×1/2×2/3×3) reusing the existing candle renderer.
 4. React/TS + lightweight-charts migration behind the existing API contracts.
 5. Postgres + Alembic persistence for users/preferences/drawings; Redis Streams delivery queue.
+
+
+## Round 3 — product decision: minimal UI (owner directive, 2026-10-10)
+
+The owner simplified the surface deliberately; this overrides some spec UI details
+(documented, not accidental omissions):
+- Removed: ticker strip, topbar stats (symbols/ingest/msg-s), footer disclaimers, density
+  radar panel, AI-hotlist panel (replaced by a slim "Топ сетапы" strip), Score/Wall/Fund
+  table columns (score still drives sorting, row highlight, alerts and the chart).
+- Moved: board to the right rail (always visible, pagination in its header), sound/language
+  filters into a burger settings menu, clock to a tiny bottom-right widget.
+- Added: OKX v5 swap feed (books 400-depth + trades + tickers) in the fallback chain
+  (binance → bybit → okx → mock) and hybrid supplement candidate; TOP_SYMBOLS default 50.
+- The backend API is unchanged — all removed surfaces remain available over REST/WS
+  (NATR/speed/walls/score fields still stream; a power UI can consume them).

@@ -536,3 +536,75 @@ tr.row-hidden-note td { color: var(--text-3); font-style: italic; }
   border-radius: 4px;
   padding: 5px 8px;
 }
+
+/* ================= v0.4: burger settings, top setups, clock, left-col ================= */
+.settings-menu {
+  position: fixed;
+  top: 54px;
+  right: 16px;
+  width: 280px;
+  background: var(--panel);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  box-shadow: 0 16px 44px rgba(0,0,0,0.45);
+  z-index: 60;
+  padding: 8px 0;
+}
+.settings-menu.hidden { display: none; }
+.set-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  border-bottom: 1px solid var(--border);
+}
+.set-row:last-child { border-bottom: none; }
+.brand-status { font-size: 10.5px; color: var(--text-3); }
+
+.left-col { display: flex; flex-direction: column; gap: 12px; min-height: 0; min-width: 0; }
+.topsetups-panel { flex: 0 0 auto; }
+.topsetups-body { overflow-y: auto; max-height: 132px; }
+.ts-row {
+  display: grid;
+  grid-template-columns: 110px 90px 60px minmax(120px, auto) 1fr 44px;
+  gap: 12px;
+  align-items: center;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.ts-row:last-child { border-bottom: none; }
+.ts-row:hover { background: var(--panel-2); }
+.ts-row:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+.ts-sym { font-weight: 600; color: var(--text); }
+.ts-row .tp { color: var(--text-2); }
+.ts-reason {
+  color: var(--text-3);
+  font-size: 10.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-controls { display: flex; gap: 6px; align-items: center; }
+.page-ind { color: var(--text-2); font-size: 11px; min-width: 34px; text-align: center; }
+
+.clock-corner {
+  position: fixed;
+  right: 10px;
+  bottom: 8px;
+  font-size: 10px;
+  color: var(--text-3);
+  z-index: 40;
+  user-select: none;
+}
+
+/* board fills the whole right rail now */
+.rail .board-panel { flex: 1 1 auto; min-height: 0; }
+.board-grid { flex: 1 1 auto; min-height: 0; }
