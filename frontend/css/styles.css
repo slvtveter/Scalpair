@@ -693,7 +693,7 @@ tr.row-hidden-note td { color: var(--text-3); font-style: italic; }
 .cr-imb .imb-meter { width: 40px; height: 3px; margin: 0; display: inline-block; vertical-align: middle; }
 
 .notif-inline { overflow-y: auto; }
-.density-tab { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.density-tab { flex: 0 0 280px; min-height: 0; overflow-y: auto; }
 .density-tab .density-panel { border-top: 0; }
 
 /* ================= Scalpair board refresh ================= */

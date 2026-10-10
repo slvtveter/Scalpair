@@ -898,7 +898,7 @@ document.querySelectorAll(".side-tab").forEach((tabBtn) => {
     S.sideTab = tabBtn.dataset.tab;
     $("tab-coins").classList.toggle("hidden", S.sideTab !== "coins");
     $("tab-alerts").classList.toggle("hidden", S.sideTab !== "alerts");
-    $("tab-density").classList.toggle("hidden", S.sideTab !== "density");
+    $("tab-density").classList.toggle("hidden", S.sideTab === "alerts");
     $(".list-head").classList.toggle("hidden", S.sideTab !== "coins");
     if (S.sideTab === "alerts") renderAlertsInline();
   });
