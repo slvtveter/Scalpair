@@ -44,9 +44,13 @@ async def health(request: Request) -> HealthReport:
     last_age = state.message_age_ms()
     feeds = [streamer.feed.name] if streamer and streamer.feed else []
     feeds += [f.name for f in (streamer.extra_feeds if streamer else [])]
+    uptime = time.time() - START_TIME
+    # A connector can pass the universe probe and still fail to ingest WS
+    # events. After a short warmup that state is degraded, never healthy.
+    no_ingest_after_warmup = bool(streamer and streamer.feed and state.messages_ingested == 0 and uptime > 30)
     return HealthReport(
-        status="ok" if not streamer.feed_degraded and (last_age is None or last_age < 30_000) else "degraded",
-        uptime_s=round(time.time() - START_TIME, 1),
+        status="ok" if not streamer.feed_degraded and not no_ingest_after_warmup and (last_age is None or last_age < 30_000) else "degraded",
+        uptime_s=round(uptime, 1),
         active_feeds=feeds,
         active_ws_clients=broadcaster.client_count,
         tracked_symbols=len(streamer.top_symbols) if streamer else 0,
