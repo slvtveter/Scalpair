@@ -915,7 +915,7 @@ document.querySelectorAll(".side-tab").forEach((tabBtn) => {
     $("tab-coins").classList.toggle("hidden", S.sideTab !== "coins");
     $("tab-alerts").classList.toggle("hidden", S.sideTab !== "alerts");
     $("tab-density").classList.toggle("hidden", S.sideTab === "alerts");
-    $(".list-head").classList.toggle("hidden", S.sideTab !== "coins");
+    document.querySelector(".list-head").classList.toggle("hidden", S.sideTab !== "coins");
     if (S.sideTab === "alerts") renderAlertsInline();
   });
 });
@@ -1035,7 +1035,7 @@ $("bell").addEventListener("click", () => {
   $("tab-coins").classList.add("hidden");
   $("tab-alerts").classList.remove("hidden");
   $("tab-density").classList.add("hidden");
-  $(".list-head").classList.add("hidden");
+  document.querySelector(".list-head").classList.add("hidden");
   $("settings-menu").classList.add("hidden");
   if (S._notifItems?.length) {
     S.notifLastId = Math.max(...S._notifItems.map((n) => n.id));
@@ -1700,9 +1700,10 @@ function applyI18n() {
                     ["vol24h", "Объём 24ч · USDT", "24h volume · USDT"], ["natr", "NATR(14) · 1м · %", "NATR(14) · 1m · %"], ["range5m", "Range · 5м · %", "Range · 5m · %"], ["speed", "Скорость · %/мин", "Speed · %/min"], ["change5m", "5м %", "5m %"], ["levelDist", "До уровня", "To level"]];
   sortSel.innerHTML = sortDefs.map(([v, ru, en]) => `<option value="${v}">${S.lang === "ru" ? ru : en}</option>`).join("");
   sortSel.value = sortPrev;
-  const tabBtns = document.querySelectorAll(".side-tab");
-  if (tabBtns[0]) tabBtns[0].textContent = t("coins");
-  if (tabBtns[1]) tabBtns[1].textContent = t("alerts");
+  document.querySelectorAll(".side-tab").forEach(button => {
+    const labels = {coins: t("coins"), density: S.lang === "ru" ? "Плотности" : "Liquidity map", alerts: t("alerts")};
+    button.textContent = labels[button.dataset.tab];
+  });
   $("show-levels").checked = S.showLevels; $("show-walls").checked = S.showWalls;
   $("levels-label").textContent = S.lang === "ru" ? "Уровни" : "Levels";
   $("walls-label").textContent = S.lang === "ru" ? "Плотности" : "Densities";
