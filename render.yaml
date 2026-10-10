@@ -41,10 +41,10 @@ services:
     routes:
       - type: rewrite
         source: /en
-        destination: /
+        destination: /index.html
       - type: rewrite
         source: /en/*
-        destination: /
+        destination: /index.html
     headers:
       - path: /*
         name: X-Content-Type-Options
