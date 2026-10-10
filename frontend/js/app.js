@@ -943,7 +943,7 @@ function renderAlertsInline() {
         <div class="delivery">${new Date(n.ts * 1000).toLocaleTimeString()} · ${esc(n.delivery.join(", "))}</div>
       </div>`).join("")
     : `<div class="notif-empty">${t("notifEmpty")}</div>`;
-  el.innerHTML += `<div class="notif-actions"><button id="nl-logout" class="ctl ctl-btn">${t("logout")}</button></div>`;
+  el.innerHTML += `<div class="notif-actions"><button id="nl-telegram" class="ctl ctl-btn">Telegram</button><button id="nl-logout" class="ctl ctl-btn">${t("logout")}</button><span id="nl-telegram-status" class="delivery"></span></div>`;
   const lo = $("nl-logout");
   if (lo) lo.onclick = () => {
     S.jwt = null;
@@ -953,6 +953,30 @@ function renderAlertsInline() {
     S._notifItems = [];
     renderAlertsInline();
     if (ws) ws.close();
+  };
+  const telegram = $("nl-telegram");
+  if (telegram) telegram.onclick = async () => {
+    telegram.disabled = true;
+    try {
+      const response = await api("/api/v1/telegram/link", { method: "POST" });
+      const body = await response.json().catch(() => ({}));
+      const status = $("nl-telegram-status");
+      if (!response.ok) throw new Error(body.detail || "Telegram linking failed");
+      if (!body.configured) {
+        if (status) status.textContent = "Telegram bot is not configured";
+        toast("Telegram bot is not configured", "warn");
+      } else if (body.chat_linked) {
+        if (status) status.textContent = "Telegram linked";
+        toast("✓ Telegram linked");
+      } else if (body.link_url) {
+        if (status) status.textContent = "Open the bot link to finish";
+        window.open(body.link_url, "_blank", "noopener,noreferrer");
+      }
+    } catch (error) {
+      toast(error.message || "Telegram linking failed", "err");
+    } finally {
+      telegram.disabled = false;
+    }
   };
 }
 

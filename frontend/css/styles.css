@@ -470,7 +470,8 @@ body { display: flex; flex-direction: column; }
 .notif-item b { color: var(--warn); font-weight: 500; }
 .notif-item .delivery { color: var(--text-3); font-size: 10px; margin-top: 2px; }
 .notif-empty { padding: 18px; text-align: center; color: var(--text-3); }
-.notif-actions { padding: 8px 14px; }
+.notif-actions { padding: 8px 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.notif-actions .delivery { flex: 1 1 100%; }
 .notif-actions a { color: var(--accent); text-decoration: none; font-size: 11px; }
 
 .toasts { position: fixed; bottom: 44px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 70; }
