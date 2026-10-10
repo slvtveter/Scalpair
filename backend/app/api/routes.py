@@ -47,7 +47,7 @@ async def health(request: Request) -> HealthReport:
     uptime = time.time() - START_TIME
     # A connector can pass the universe probe and still fail to ingest WS
     # events. After a short warmup that state is degraded, never healthy.
-    no_ingest_after_warmup = bool(streamer and streamer.feed and state.messages_ingested == 0 and uptime > 30)
+    no_ingest_after_warmup = state.messages_ingested == 0 and uptime > 30
     return HealthReport(
         status="ok" if not streamer.feed_degraded and not no_ingest_after_warmup and (last_age is None or last_age < 30_000) else "degraded",
         uptime_s=round(uptime, 1),
