@@ -898,6 +898,8 @@ document.querySelectorAll(".side-tab").forEach((tabBtn) => {
     S.sideTab = tabBtn.dataset.tab;
     $("tab-coins").classList.toggle("hidden", S.sideTab !== "coins");
     $("tab-alerts").classList.toggle("hidden", S.sideTab !== "alerts");
+    $("tab-density").classList.toggle("hidden", S.sideTab !== "density");
+    $(".list-head").classList.toggle("hidden", S.sideTab !== "coins");
     if (S.sideTab === "alerts") renderAlertsInline();
   });
 });
@@ -992,6 +994,8 @@ $("bell").addEventListener("click", () => {
   document.querySelectorAll(".side-tab").forEach((x) => x.classList.toggle("active", x.dataset.tab === "alerts"));
   $("tab-coins").classList.add("hidden");
   $("tab-alerts").classList.remove("hidden");
+  $("tab-density").classList.add("hidden");
+  $(".list-head").classList.add("hidden");
   $("settings-menu").classList.add("hidden");
   if (S._notifItems?.length) {
     S.notifLastId = Math.max(...S._notifItems.map((n) => n.id));
