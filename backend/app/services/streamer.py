@@ -410,7 +410,11 @@ class MarketStreamer:
                 log.warning("source %s is silent or has books without trades; keeping sources isolated", self.feed.name)
                 if silent_rounds >= self.FAILOVER_AFTER_SILENT_ROUNDS:
                     await self._attempt_failover(generation)
-                    return
+                    # Keep watching when all alternate probes are currently
+                    # unavailable; the next interval gets another chance.
+                    if generation != self._generation:
+                        return
+                    silent_rounds = 1
             else:
                 silent_rounds = 0
             self.publish(self.build_snapshot())
