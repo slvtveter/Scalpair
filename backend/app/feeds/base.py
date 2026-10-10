@@ -154,6 +154,8 @@ class FeedConnector:
                 self.stats.messages += 1
                 self.stats.last_message_at = last
                 try:
+                    if isinstance(raw, (str, bytes)) and str(raw).strip().lower() in ("pong", "ping"):
+                        continue  # venue keepalive reply (OKX text pong)
                     msg = json.loads(raw) if isinstance(raw, (str, bytes)) else raw
                     await self.handle_message(msg)
                 except Exception:  # noqa: BLE001 — a malformed frame must not kill the feed

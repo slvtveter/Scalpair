@@ -30,6 +30,8 @@ const I18N = {
     resistance: "сопротивление", support: "поддержка", inside: "внутри зоны",
     close: "Закрыть", soundOn: "Звук вкл", soundOff: "Звук выкл",
     thresholdNeeded: "укажите порог", logout: "Выйти",
+    alertsBtn: "Алерты", feed: "Фид", soundLabel: "Звук (скор ≥ 85)", langLabel: "Язык / Language",
+    minScoreLabel: "Мин. скоринг", minWallLabel: "Мин. стена", tzLabel: "Часовой пояс", reconnecting: "переподключение", connecting: "подключение", symbolsCount: "симв.",
   },
   en: {
     scanner: "Scanner", board: "Board", topsetups: "Top setups", alerts: "Alerts",
@@ -47,6 +49,8 @@ const I18N = {
     resistance: "resistance", support: "support", inside: "inside zone",
     close: "Close", soundOn: "Sound on", soundOff: "Sound off",
     thresholdNeeded: "set a threshold", logout: "Log out",
+    alertsBtn: "Alerts", feed: "Feed", soundLabel: "Sound (score ≥ 85)", langLabel: "Language",
+    minScoreLabel: "Min score", minWallLabel: "Min wall", tzLabel: "Timezone", reconnecting: "reconnecting", connecting: "connecting", symbolsCount: "symbols",
   },
 };
 const t = (k, vars) => {
@@ -81,7 +85,6 @@ const S = {
   page: 0,
   search: "",
   watch: new Set(LS.get("watch", [])),
-  hidden: new Set(LS.get("hidden", [])),
   jwt: LS.get("jwt", null),
   candleCache: new Map(),
   notifLastId: LS.get("notifLastId", 0),
@@ -97,8 +100,8 @@ function setFeedStatus(status) {
   const b = $("feed-badge");
   if (status === "live") { b.textContent = `· ${S.feed.replace("-trades", "").toUpperCase()}`; b.style.color = "var(--up)"; }
   else if (status === "reconnecting") { b.textContent = "· переподключение"; b.style.color = "var(--warn)"; }
-  else { b.textContent = "· подключение"; b.style.color = "var(--text-3)"; }
-  $("set-feed").textContent = S.feed !== "—" ? S.feed : "—";
+  else { b.textContent = `· ${t("connecting")}`; b.style.color = "var(--text-3)"; }
+  $("set-feed").textContent = S.feed !== "—" ? `${S.feed} · ${S.stats.tracked ?? 0} ${t("symbolsCount")}` : "—";
 }
 
 function connect() {
@@ -227,7 +230,7 @@ function scoreClass(score) {
 const tbody = $("table-body");
 const rowMap = new Map();
 
-const TH_KEYS = ["symbol", "price", null, "change5m", "surge", null, "level", "tag"];
+const TH_KEYS = ["symbol", "price", null, "change5m", "surge", null, "spread", "level", "tag"];
 
 function updateSortIndicator() {
   document.querySelectorAll("#main-table thead th").forEach((th, i) => {
@@ -240,9 +243,8 @@ function updateSortIndicator() {
 }
 
 function visibleRows() {
-  let rows = S.symbols.filter((r) => !S.hidden.has(r.symbol));
+  let rows = S.symbols.filter((r) => r.vol5m > 0 || r.tps > 0.1); // skip dead listings
   if (S.search) rows = rows.filter((r) => r.symbol.includes(S.search.toUpperCase()));
-  if ($("watch-only")?.checked) rows = rows.filter((r) => S.watch.has(r.symbol));
   rows = rows.filter((r) => (r.score ?? 0) >= S.minScore);
   return [...rows].sort((a, b) => {
     switch (S.sortKey) {
@@ -294,6 +296,7 @@ function renderTable() {
       `<td class="mono ${cls(r.change5m)}">${fmtPct(r.change5m)}</td>`,
       `<td class="mono ${cls(r.surge - 1)}">${r.surge != null ? `${r.surge.toFixed(1)}x` : "—"}</td>`,
       `<td class="col-imb"><span class="imb-val mono">${imb >= 0 ? "+" : ""}${imb.toFixed(2)}</span><div class="imb-meter"><div class="imb-fill ${imb >= 0 ? "bid" : "ask"}" style="width:${imbW}%"></div></div></td>`,
+      `<td class="mono ${r.spreadBps > 15 ? "down" : "dim"}">${r.spreadBps != null ? r.spreadBps.toFixed(1) : "—"}</td>`,
       `<td class="mono ${r.levelDist === 0 ? "up" : "dim"}">${levelTxt}</td>`,
       `<td class="col-tag"><span class="tag-cell ${tagClass(r.tag)}">${esc(r.tag ?? "—")}</span></td>`,
     ];
@@ -969,7 +972,7 @@ function fitCanvas(cv, logicalH) {
 function applyI18n() {
   document.documentElement.lang = S.lang;
   const ths = document.querySelectorAll("#main-table thead th");
-  const names = ["ticker", "price", "trend", "ch5m", "surge", "imb", "level", "setup"];
+  const names = ["ticker", "price", "trend", "ch5m", "surge", "imb", "spread", "level", "setup"];
   ths.forEach((th, i) => {
     if (!names[i]) return;
     const hint = th.querySelector(".hint-inline");
@@ -979,6 +982,13 @@ function applyI18n() {
   $("h2-scanner").textContent = t("scanner");
   $("h2-board").textContent = t("board");
   $("h2-topsetups").textContent = t("topsetups");
+  $("bell").childNodes.forEach((n) => { if (n.nodeType === 3) n.textContent = t("alertsBtn"); });
+  const setMap = { "set-feed-label": "feed", "set-sound-label": "soundLabel", "set-lang-label": "langLabel",
+                   "set-score-label": "minScoreLabel", "set-wall-label": "minWallLabel", "set-tz-label": "tzLabel" };
+  for (const [id, key] of Object.entries(setMap)) {
+    const el = $(id);
+    if (el) el.textContent = t(key);
+  }
   $("search").placeholder = t("searchPh");
   $("table-empty").textContent = S.symbols.length ? t("noMatch") : t("waiting");
   $("board-empty").textContent = t("waiting");

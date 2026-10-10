@@ -12,6 +12,8 @@ Docs: https://www.okx.com/docs-v5/en/#order-book-trading-market-data
 
 from __future__ import annotations
 
+import contextlib
+import json
 import logging
 from typing import Any
 
@@ -43,6 +45,7 @@ class OkxSwapFeed(FeedConnector):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self._books: dict[str, dict[str, dict[float, float]]] = {}
+        self._book_seq: dict[str, int] = {}
         self._insts: dict[str, str] = {}  # unified symbol -> instId
 
     async def subscribe_messages(self, symbols: list[str]) -> list[dict[str, Any]]:
@@ -61,6 +64,26 @@ class OkxSwapFeed(FeedConnector):
     async def _send_keepalive(self, ws: Any) -> None:
         """OKX uses a literal text 'ping' (not JSON) — base class sends JSON, so override."""
         await ws.send("ping")
+
+    async def fetch_klines(self, symbol: str, limit: int = 300) -> list[tuple]:
+        """Backfill 1m OHLCV: /api/v5/market/candles bar=1m -> [(ts,o,h,l,c,vol)]."""
+        url = f"{REST_BASE}/api/v5/market/candles"
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as sess:
+            async with sess.get(
+                url,
+                params={"instId": symbol_to_inst(symbol), "bar": "1m", "limit": min(limit, 300)},
+            ) as resp:
+                resp.raise_for_status()
+                body = await resp.json()
+        out = []
+        for r in body.get("data") or []:  # newest-first: [ts, o, h, l, c, vol, ...]
+            try:
+                out.append((int(r[0]), float(r[1]), float(r[2]), float(r[3]), float(r[4]), float(r[5])))
+            except (IndexError, ValueError, TypeError):
+                continue
+        out.reverse()
+        return out
 
     async def fetch_universe(self, n: int) -> list[dict[str, Any]]:
         url = f"{REST_BASE}/api/v5/market/tickers"
@@ -117,6 +140,29 @@ class OkxSwapFeed(FeedConnector):
         if not isinstance(data, list) or not data:
             return
         book = self._books.setdefault(sym, {"bids": {}, "asks": {}})
+        # continuity: update entries carry prevSeqId/seqId; a gap invalidates the
+        # maintained book until the next snapshot (OKX sends one on resubscribe)
+        if not self._resync_pending.discard if False else True:
+            pass
+        for entry in data:
+            if isinstance(entry, dict) and entry.get("action") == "update":
+                try:
+                    prev_id, seq_id = int(entry.get("prevSeqId", 0)), int(entry.get("seqId", 0))
+                except (TypeError, ValueError):
+                    continue
+                last = self._book_seq.get(sym)
+                if last is not None and prev_id != last:
+                    log.warning("okx books seq gap for %s (%d -> %d) — book stale until snapshot",
+                                sym, last, seq_id)
+                    book["bids"] = {}
+                    book["asks"] = {}
+                    self._book_seq.pop(sym, None)
+                    if self._ws is not None:
+                        with contextlib.suppress(Exception):
+                            await self._ws.send(json.dumps(
+                                {"op": "subscribe", "args": [{"channel": "books", "instId": symbol_to_inst(sym)}]}))
+                    return  # drop the corrupted pass; snapshot will rebuild
+                self._book_seq[sym] = seq_id
         ts = 0.0
         for entry in data:
             action = entry.get("action", "snapshot")
@@ -143,9 +189,10 @@ class OkxSwapFeed(FeedConnector):
             return
         for tr in data:
             try:
-                # OKX side = taker side: "Buy" => taker bought => buyer not maker
+                # OKX v5 sends lowercase taker side ("buy"/"sell")
+                taker_buy = tr.get("side", "").lower() == "buy"
                 await self.callbacks.on_trade(
-                    sym, float(tr["ts"]), float(tr["px"]), float(tr["sz"]), tr.get("side") != "Buy"
+                    sym, float(tr["ts"]), float(tr["px"]), float(tr["sz"]), not taker_buy
                 )
             except (KeyError, ValueError, TypeError):
                 continue

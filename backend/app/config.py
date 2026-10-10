@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     # --- Feed ---
-    data_feed: Literal["auto", "binance", "bybit", "mock"] = "auto"
+    data_feed: Literal["auto", "binance", "bybit", "okx", "mock"] = "auto"
     top_symbols: int = 50
 
     # --- Server ---

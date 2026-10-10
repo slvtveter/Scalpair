@@ -194,7 +194,8 @@ class MarketStreamer:
                 candidate.set_universe(self.top_symbols)
                 self._tasks.append(asyncio.create_task(candidate.run(), name=f"{candidate.name}-run"))
                 self._seeded_symbols.clear()
-                self._tasks.append(asyncio.create_task(self._candle_backfill_task(), name="candle-backfill-recovered"))
+                self._start_backfill()
+                self._tasks.append(asyncio.create_task(self._degradation_watch(), name="degradation-watch-recovered"))
                 self._tasks.append(asyncio.create_task(self._live_recovery_loop(), name="live-recovery-recovered"))
                 return
         log.info("streamer started: feed=%s symbols=%d", self.feed.name, len(self.top_symbols))
