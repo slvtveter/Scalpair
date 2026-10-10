@@ -14,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.auth import User, current_user
 from app.config import get_settings
-from app.db import AlertEvent, AlertRule, NotificationDelivery, TelegramLink, WatchlistItem, get_session_factory
+from app.db import AlertEvent, AlertRule, NotificationDelivery, TelegramLink, UserPreference, WatchlistItem, get_session_factory
 
 router = APIRouter(prefix="/api/v1", tags=["alerts"])
 
@@ -29,6 +29,37 @@ def _require_user(user: User | None) -> User:
 
 class WatchlistIn(BaseModel):
     symbols: list[str] = Field(default_factory=list, max_length=500)
+
+
+class PreferencesIn(BaseModel):
+    preferences: dict[str, Any] = Field(default_factory=dict)
+
+
+@router.get("/preferences")
+async def get_preferences(user: AUTHORIZED) -> dict[str, Any]:
+    _require_user(user)
+    factory = get_session_factory(get_settings().database_url)
+    async with factory() as sess:
+        row = await sess.scalar(select(UserPreference).where(UserPreference.user_id == user.id))
+    return {"preferences": row.payload if row else {}}
+
+
+@router.put("/preferences")
+async def put_preferences(body: PreferencesIn, user: AUTHORIZED) -> dict[str, Any]:
+    _require_user(user)
+    # Keep this endpoint a workspace store rather than an arbitrary JSON sink.
+    allowed = {"groups", "hidden", "order", "filters", "filterPresets", "grid", "sort", "sortAscending", "autoSort", "boardTf", "showLevels", "showWalls"}
+    payload = {key: value for key, value in body.preferences.items() if key in allowed}
+    factory = get_session_factory(get_settings().database_url)
+    async with factory() as sess:
+        row = await sess.scalar(select(UserPreference).where(UserPreference.user_id == user.id))
+        if row is None:
+            row = UserPreference(user_id=user.id, payload=payload)
+            sess.add(row)
+        else:
+            row.payload = payload
+        await sess.commit()
+    return {"preferences": payload}
 
 
 @router.get("/watchlists")

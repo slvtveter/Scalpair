@@ -134,12 +134,12 @@ function saveGroup(id, name, color) {
   if (id && !existing) throw new Error("Group not found");
   if (existing) { existing.name=name; existing.color=color; }
   else { id=crypto.randomUUID(); S.groups.push({id,name,color,symbols:[]}); }
-  LS.set("groups",S.groups); return id;
+  LS.set("groups",S.groups); persistPreferences(); return id;
 }
 function deleteGroup(id) {
   S.groups=S.groups.filter(g=>g.id!==id);
   if (S.activeGroup===id) {S.activeGroup="all";LS.set("activeGroup","all");}
-  LS.set("groups",S.groups);
+  LS.set("groups",S.groups); persistPreferences();
 }
 function toggleGroupSymbol(id,symbol) {
   if (id==="watch") {
@@ -151,7 +151,7 @@ function toggleGroupSymbol(id,symbol) {
   const group=S.groups.find(g=>g.id===id);
   if (!group) return;
   group.symbols=group.symbols.includes(symbol)?group.symbols.filter(s=>s!==symbol):[...group.symbols,symbol];
-  LS.set("groups",S.groups);
+  LS.set("groups",S.groups); persistPreferences();
 }
 function inActiveGroup(symbol) {
   if (S.activeGroup==="all") return true;
@@ -429,6 +429,7 @@ function renderMarketFilters() {
 function applyMarketFilters(filters) {
   S.filters = filters; S.page = 0;
   LS.set("filters", filters);
+  persistPreferences();
   $("filters-error").textContent = "";
   renderMarketFilters(); renderBoard(); renderCoinList();
 }
@@ -452,15 +453,15 @@ $("preset-save").addEventListener("click", () => {
   if (!name) { $("filters-error").textContent = S.lang === "ru" ? "Укажите название" : "Enter a name"; return; }
   try {
     const filters = readFilterForm();
-    S.presets = {...S.presets, [name]: filters}; LS.set("filterPresets", S.presets);
+    S.presets = {...S.presets, [name]: filters}; LS.set("filterPresets", S.presets); persistPreferences();
     applyMarketFilters(filters); $("filter-presets").value = name;
   } catch (error) { $("filters-error").textContent = error.message; }
 });
 $("preset-delete").addEventListener("click", () => {
-  delete S.presets[$("filter-presets").value]; LS.set("filterPresets", S.presets); renderMarketFilters();
+  delete S.presets[$("filter-presets").value]; LS.set("filterPresets", S.presets); persistPreferences(); renderMarketFilters();
 });
 $("sort-direction").addEventListener("click", () => {
-  S.sortAscending = !S.sortAscending; LS.set("sortAscending", S.sortAscending);
+  S.sortAscending = !S.sortAscending; LS.set("sortAscending", S.sortAscending); persistPreferences();
   $("sort-direction").textContent = S.sortAscending ? "↑" : "↓";
   renderBoard(); renderCoinList();
 });
@@ -501,6 +502,7 @@ function setAutoSort(enabled) {
   if (enabled) S.hoverUntil = 0;
   LS.set("autoSort", enabled);
   if (!enabled) LS.set("order", S.order);
+  persistPreferences();
   updateSortControl();
 }
 
@@ -517,6 +519,7 @@ function moveBoardSymbol(source, target) {
   order.splice(order.indexOf(target), 0, source);
   S.order = order;
   LS.set("order", order);
+  persistPreferences();
   return true;
 }
 
@@ -836,8 +839,8 @@ $("board-grid").addEventListener("keydown", (e) => {
   const tile = e.target.closest(".board-tile");
   if (tile) { e.preventDefault(); openChart(tile.dataset.sym); }
 });
-$("grid-size").addEventListener("change", (e) => { S.gridSize = +e.target.value; LS.set("grid", S.gridSize); S.page = 0; _boardSig = ""; renderBoard(); });
-$("board-tf").addEventListener("change", (e) => { S.boardTf = +e.target.value; LS.set("boardTf", S.boardTf); S.page = 0; _boardSig = ""; renderBoard(); });
+$("grid-size").addEventListener("change", (e) => { S.gridSize = +e.target.value; LS.set("grid", S.gridSize); persistPreferences(); S.page = 0; _boardSig = ""; renderBoard(); });
+$("board-tf").addEventListener("change", (e) => { S.boardTf = +e.target.value; LS.set("boardTf", S.boardTf); persistPreferences(); S.page = 0; _boardSig = ""; renderBoard(); });
 $("page-prev").addEventListener("click", () => { if (S.page > 0) { S.page -= 1; _boardSig = ""; renderBoard(); } });
 $("page-next").addEventListener("click", () => { S.page += 1; _boardSig = ""; renderBoard(); });
 // board repaint on its own cadence (2s) — decoupled from the 150ms light loop
@@ -1041,6 +1044,7 @@ async function authFlow(path) {
       LS.set("jwt", S.jwt);
       toast("✓ " + t("signIn"));
       await syncWatchlist();
+      await syncPreferences();
       if (ws) ws.close(); // reconnect carries the token → full feed
       pollNotifications();
     } else {
@@ -1070,6 +1074,53 @@ async function persistWatchlist() {
       body: JSON.stringify({ symbols: [...S.watch] }),
     });
   } catch {}
+}
+
+function preferencePayload() {
+  return {
+    groups: S.groups,
+    hidden: [...S.hidden],
+    order: S.order,
+    filters: S.filters,
+    filterPresets: S.presets,
+    grid: S.gridSize,
+    sort: S.sortKey,
+    sortAscending: S.sortAscending,
+    autoSort: S.autoSort,
+    boardTf: S.boardTf,
+    showLevels: S.showLevels,
+    showWalls: S.showWalls,
+  };
+}
+
+async function syncPreferences() {
+  if (!S.jwt) return;
+  try {
+    const response = await api("/api/v1/preferences");
+    if (!response.ok) return;
+    const body = await response.json();
+    const p = body.preferences || {};
+    if (!Object.keys(p).length) { await persistPreferences(); return; }
+    if (Array.isArray(p.groups)) S.groups = p.groups.filter(g => g && typeof g.id === "string" && typeof g.name === "string" && GROUP_COLORS[g.color] && Array.isArray(g.symbols));
+    if (Array.isArray(p.hidden)) S.hidden = new Set(p.hidden);
+    if (Array.isArray(p.order)) S.order = p.order;
+    if (p.filters && typeof p.filters === "object") S.filters = p.filters;
+    if (p.filterPresets && typeof p.filterPresets === "object") S.presets = p.filterPresets;
+    if ([1, 2, 3, 4].includes(Number(p.grid))) S.gridSize = Number(p.grid);
+    if (typeof p.sort === "string") S.sortKey = p.sort;
+    if (typeof p.sortAscending === "boolean") S.sortAscending = p.sortAscending;
+    if (typeof p.autoSort === "boolean") S.autoSort = p.autoSort;
+    if (Number.isFinite(Number(p.boardTf))) S.boardTf = Number(p.boardTf);
+    if (typeof p.showLevels === "boolean") S.showLevels = p.showLevels;
+    if (typeof p.showWalls === "boolean") S.showWalls = p.showWalls;
+    for (const [key, value] of Object.entries({groups:S.groups, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls})) LS.set(key, value);
+    renderGroups(); renderMarketFilters(); updateSortControl(); renderBoard(); renderCoinList();
+  } catch {}
+}
+
+async function persistPreferences() {
+  if (!S.jwt) return;
+  try { await api("/api/v1/preferences", {method: "PUT", body: JSON.stringify({preferences: preferencePayload()})}); } catch {}
 }
 
 $("bell").addEventListener("click", () => {
@@ -1207,7 +1258,7 @@ document.addEventListener("click", e => {
   if (!e.target.closest(".search-wrap") && !e.target.closest("#search-results")) closeSearch();
 });
 
-$("sort-by").addEventListener("change", (e) => { S.sortKey = e.target.value; LS.set("sort", S.sortKey); renderBoard(); renderCoinList(); });
+$("sort-by").addEventListener("change", (e) => { S.sortKey = e.target.value; LS.set("sort", S.sortKey); persistPreferences(); renderBoard(); renderCoinList(); });
 $("venue-chips")?.addEventListener("click", (event) => {
   const btn = event.target.closest(".venue-chip");
   if (!btn) return;
@@ -1401,7 +1452,7 @@ function updateHiddenControl() {
 $("chart-hide").addEventListener("click", () => {
   if (!chartSym) return;
   if (S.hidden.has(chartSym)) S.hidden.delete(chartSym); else S.hidden.add(chartSym);
-  LS.set("hidden", [...S.hidden]); updateHiddenControl(); renderBoard(); renderCoinList();
+  LS.set("hidden", [...S.hidden]); persistPreferences(); updateHiddenControl(); renderBoard(); renderCoinList();
 });
 $("chart-fullscreen").addEventListener("click", async () => {
   try {

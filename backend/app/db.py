@@ -41,6 +41,16 @@ class WatchlistItem(Base):
     symbol: Mapped[str] = mapped_column(String(32), index=True)
 
 
+class UserPreference(Base):
+    """Versioned client workspace state for authenticated users."""
+    __tablename__ = "user_preferences"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    updated_at: Mapped[float] = mapped_column(Float, default=time.time, onupdate=time.time)
+
+
 class ChartDrawing(Base):
     """User-owned Focus drawings keyed by symbol."""
     __tablename__ = "chart_drawings"
