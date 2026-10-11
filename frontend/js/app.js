@@ -1395,21 +1395,35 @@ function focusInstrumentId() {
   return chartSym ? `${venue}:${focusMarketForVenue(venue)}:${chartSym}` : "";
 }
 function setupFocusSource(row) {
-  const venues = [...new Set([row?.venue, "BI-F", "BI-S", "BY-F", "BY-S", "OK-F"].filter(Boolean))];
+  const venues = [...new Set([chartInstrumentId.split(":")[0], row?.venue, "BI-F", "BI-S", "BY-F", "BY-S", "OK-F"].filter(Boolean))];
   focusSourceSelect.innerHTML = venues.map(v => `<option value="${esc(v)}">${esc(focusVenueNames[v] || v)}</option>`).join("");
-  if (!venues.includes(S.focusVenue)) S.focusVenue = row?.venue || venues[0];
+  S.focusVenue = chartInstrumentId.split(":")[0] || row?.venue || venues[0];
   focusSourceSelect.value = S.focusVenue;
   focusSourceSelect.classList.remove("hidden");
   const host = document.querySelector(".modal-head-right");
   if (host && focusSourceSelect.parentElement !== host) host.prepend(focusSourceSelect);
 }
-focusSourceSelect.addEventListener("change", () => {
-  S.focusVenue = focusSourceSelect.value;
-  LS.set("focusVenue", S.focusVenue);
+async function changeFocusSource(venue) {
+  if (!chartSym || !Object.hasOwn(focusVenueNames, venue)) return;
+  S.focusVenue = venue;
+  chartInstrumentId = `${venue}:${focusMarketForVenue(venue)}:${chartSym}`;
+  LS.set("focusVenue", venue);
   persistPreferences();
-  for (const pane of focusPanes) { pane.candles = []; pane.series = []; pane.walls = []; pane.levels = []; }
-  refreshFocus(true);
-});
+  drawingDraft = null;
+  for (const pane of focusPanes) {
+    pane.requestId = (pane.requestId || 0) + 1;
+    pane.candles = []; pane.series = []; pane.walls = []; pane.levels = [];
+    pane.hover = null; pane.syncedTime = null; pane.offset = 0; pane.followRight = true;
+  }
+  $("chart-title").textContent = `${chartSym} · ${focusVenueNames[venue]} · ${focusMarketForVenue(venue)}`;
+  // Scores from another venue must not follow a source switch.
+  $("chart-tag").textContent = "—";
+  $("chart-tag").className = "tag-cell";
+  $("chart-thesis").textContent = "—";
+  updateHiddenControl(); updateChartGroupControl(); drawChart();
+  await Promise.all([loadServerDrawings(chartSym), refreshFocus(true)]);
+}
+focusSourceSelect.addEventListener("change", () => changeFocusSource(focusSourceSelect.value));
 
 const chart = {
   index: 0, candles: [], series: [], tfMin: 1, sourceTf: 1, historyStatus: "", walls: [], levels: [],
@@ -1431,11 +1445,14 @@ function saveDrawings(rows) {
 }
 async function loadServerDrawings(symbol) {
   if (!S.jwt || !symbol) return;
+  const identity = focusInstrumentId(), key = drawingKey();
   try {
-    const query = focusInstrumentId() ? `?instrument_id=${encodeURIComponent(focusInstrumentId())}` : "";
+    const query = identity ? `?instrument_id=${encodeURIComponent(identity)}` : "";
     const r=await api(`/api/v1/drawings/${encodeURIComponent(symbol)}${query}`);
     if(!r.ok)return;
-    const b=await r.json(); LS.set(drawingKey(),b.drawings||[]); drawChart();
+    const b=await r.json();
+    if (symbol !== chartSym || identity !== focusInstrumentId()) return;
+    LS.set(key,b.drawings||[]); drawChart();
   } catch {}
 }
 function setDrawingTool(tool) { drawingTool=tool; drawingDraft=null; document.querySelectorAll(".draw-btn").forEach(b=>b.classList.toggle("active",b.dataset.draw===tool)); drawChart(); }
@@ -1525,9 +1542,11 @@ async function openChart(symbol, instrumentId = "") {
   loadServerDrawings(symbol);
   updateHiddenControl();
   updateChartGroupControl();
-  const r = S.symbols.find((row) => row.instrument_id === chartInstrumentId) || S.bySym.get(symbol);
+  const r = chartInstrumentId
+    ? [...S.symbols, ...S.catalog].find((row) => row.instrument_id === chartInstrumentId)
+    : S.bySym.get(symbol);
   setupFocusSource(r);
-  const pick = S.picks.find((p) => p.symbol === symbol && (!chartInstrumentId || !p.instrument_id || p.instrument_id === chartInstrumentId)) || S.picks.find((p) => p.symbol === symbol);
+  const pick = S.picks.find((p) => p.symbol === symbol && (!chartInstrumentId || !p.instrument_id || p.instrument_id === chartInstrumentId));
   $("chart-title").textContent = `${symbol} · ${focusVenueNames[S.focusVenue] || S.focusVenue || r?.venue || "—"} · ${r?.market || "FUTURES"} · ${timeframeName(chart.tfMin)}`;
   $("chart-tag").textContent = pick?.tag || r?.tag || "—";
   $("chart-tag").className = `tag-cell ${tagClass(pick?.tag || r?.tag)}`;
@@ -1552,7 +1571,7 @@ async function refreshChart(resetView = false, chart = focusPanes[0]) {
     const res = await fetch(`${API_BASE}/api/v1/markets/${encodeURIComponent(chartSym)}/candles?limit=300&timeframe=${timeframeName(tf)}${sourceParam}`, { cache: "no-store", signal: AbortSignal.timeout(20000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await res.json();
-    if (requestId !== chart.requestId || symbol !== chartSym || epoch !== S.dataEpoch || tf !== chart.tfMin || chart.index >= S.focusLayout) return;
+    if (requestId !== chart.requestId || symbol !== chartSym || instrumentId !== focusInstrumentId() || epoch !== S.dataEpoch || tf !== chart.tfMin || chart.index >= S.focusLayout) return;
     chart.sourceTf = tf;
     $("chart-title").textContent = `${symbol} · ${body.venue || "—"} · ${body.market || "FUTURES"} · ${timeframeName(tf)}`;
     const overlayStatus = body.overlaysAvailable === false
@@ -1567,7 +1586,7 @@ async function refreshChart(resetView = false, chart = focusPanes[0]) {
     chart.offset = clampOffset(resetView || chart.followRight ? chart.series.length-chart.visible : chart.offset, chart);
     drawChart();
   } catch {
-    if (requestId !== chart.requestId || symbol !== chartSym || epoch !== S.dataEpoch || tf !== chart.tfMin || chart.index >= S.focusLayout) return;
+    if (requestId !== chart.requestId || symbol !== chartSym || instrumentId !== focusInstrumentId() || epoch !== S.dataEpoch || tf !== chart.tfMin || chart.index >= S.focusLayout) return;
     setHistoryStatus(S.lang === "ru" ? "История недоступна · повтор через 5с" : "History unavailable · retry in 5s", chart);
     drawChart();
   }

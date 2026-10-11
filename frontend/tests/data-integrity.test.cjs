@@ -355,3 +355,38 @@ test('workspace favorites, groups and hidden instruments distinguish Spot from F
   assert.equal(a.run(`workspaceHas(S.watch,'BI-S:SPOT:BTCUSDT')`), false);
   assert.equal(a.run(`workspaceHas(S.watch,'BY-F:FUTURES:BTCUSDT')`), true);
 });
+
+test('Focus source switch requests the selected market and clears previous source overlays', async () => {
+  const a = app();
+  a.el('chart-modal').classList.contains = () => false;
+  const requests = [];
+  a.context.fetch = async url => {
+    requests.push(String(url));
+    return {ok:true, json:async()=>({candles:[],venue:'BI-S',market:'SPOT'})};
+  };
+  a.run(`chartSym='BTCUSDT'; chartInstrumentId='BY-F:FUTURES:BTCUSDT'; S.focusOpen=true;
+    chart.walls=[{price:100}]; chart.levels=[{price:100}];
+    S.focusVenue='BI-S'; document.querySelector('.modal-head-right').prepend=()=>{};
+    drawChart=()=>{}; setupFocusSource({venue:'BY-F'});`);
+  assert.equal(a.run('S.focusVenue'), 'BY-F');
+  await a.run(`changeFocusSource('BI-S')`);
+  assert.equal(a.run('focusInstrumentId()'), 'BI-S:SPOT:BTCUSDT');
+  assert.equal(a.run('drawingKey()'), 'drawings:BI-S:SPOT:BTCUSDT');
+  assert.equal(a.run('chart.walls.length+chart.levels.length'), 0);
+  assert.equal(requests.length, 2);
+  assert.ok(requests.every(url => new URL(url,'http://localhost').searchParams.get('instrument_id') === 'BI-S:SPOT:BTCUSDT'));
+});
+
+test('late server drawings cannot overwrite the next Focus instrument', async () => {
+  const a = app();
+  const writes = [];
+  a.context.localStorage.setItem = (key,value) => writes.push([key,value]);
+  let finish;
+  a.context.fetch = () => new Promise(resolve => { finish=resolve; });
+  a.run(`S.jwt='test';chartSym='BTCUSDT';chartInstrumentId='BY-F:FUTURES:BTCUSDT';`);
+  const pending = a.run(`loadServerDrawings('BTCUSDT')`);
+  a.run(`chartInstrumentId='BI-S:SPOT:BTCUSDT'`);
+  finish({ok:true,json:async()=>({drawings:[{type:'horizontal'}]})});
+  await pending;
+  assert.deepEqual(writes, []);
+});
