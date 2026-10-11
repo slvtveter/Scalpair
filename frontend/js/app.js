@@ -562,11 +562,11 @@ async function refreshDensityMap() {
     badge.textContent = body.feed === "mock" ? "DEMO · synthetic" : walls.length ? `${walls.length} · top L2` : "Нет свежих плотностей";
     walls.slice(0, 12).forEach((wall, i) => {
       const pill = document.createElement("button");
-      pill.className = `density-pill dynamic ${wall.side === "bid" ? "bid" : "ask"}`;
+      pill.className = `density-pill dynamic ${wall.side === "bid" ? "bid" : "ask"} density-${wall.category || "unknown"}`;
       pill.style.top = `${50 - wall.distance_pct / 3 * 45}%`;
       pill.style.left = `${(i % 2) * 47 + 2}%`;
       pill.textContent = `${wall.venue || "—"} ${wall.symbol.replace(/USDT$/, "")} ${fmtUsd(wall.notional_usd)}`;
-      pill.title = `${wall.symbol} · ${wall.side} · ${fmtPrice(wall.price)} · ${wall.distance_pct.toFixed(2)}%`;
+      pill.title = `${wall.symbol} · ${wall.side} · ${wall.category || "—"} · BRP ${fmtUsd(wall.brp_usd)} · ${fmtPrice(wall.price)} · ${wall.distance_pct.toFixed(2)}% · ${wall.levels_bid || 0}/${wall.levels_ask || 0} L2 levels`;
       pill.onclick = () => openChart(wall.symbol);
       grid.appendChild(pill);
     });

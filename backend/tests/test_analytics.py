@@ -196,6 +196,9 @@ class TestRefreshWalls:
         assert wall["seconds_to_eat"] is not None
         assert wall["seconds_to_eat"] > 0
         assert wall["symbol"] == "TESTUSDT"
+        assert wall["brp_usd"] == pytest.approx(sym.density_brp_usd)
+        assert wall["category"] in {"small", "medium", "large"}
+        assert sym.density_bid_levels == len(bids) and sym.density_ask_levels == len(asks)
 
     def test_wall_age_survives_refresh_and_resets_after_disappearance(self):
         sym=SymbolState("TESTUSDT"); bids=[(100.0,1000.0)]+[(99.0-i,1.0) for i in range(15)]; asks=[(101.0,1.0)]+[(102.0+i,1.0) for i in range(15)]

@@ -151,10 +151,25 @@ async def densities(request: Request, limit: int = Query(50, ge=1, le=200)) -> J
                     "detected_at": w["detected_at"],
                     "age_s": w.get("age_s", 0.0),
                     "book_ts": st.book_ts_ms,
+                    "brp_usd": st.density_brp_usd,
+                    "category": w.get("category"),
+                    "levels_bid": st.density_bid_levels,
+                    "levels_ask": st.density_ask_levels,
                 }
             )
     walls.sort(key=lambda w: w["notional_usd"], reverse=True)
-    return JSONResponse({"ts": int(time.time() * 1000), "walls": walls[:limit], "total": len(walls), "feed": state.feed_mode})
+    return JSONResponse({
+        "ts": int(time.time() * 1000),
+        "walls": walls[:limit],
+        "total": len(walls),
+        "feed": state.feed_mode,
+        "coverage": {
+            "kind": "top_n_levels",
+            "max_levels_per_side": max((max((w["levels_bid"] for w in walls), default=0), max((w["levels_ask"] for w in walls), default=0))),
+            "complete_percent_range": False,
+            "note": "Only received top-N L2 levels; this is not full 1–10% market depth.",
+        },
+    })
 
 
 @router.get("/screeners/ai-picks")

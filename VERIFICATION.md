@@ -264,6 +264,15 @@ syntax/static-server checks did not establish functional or visual acceptance.
   source remains healthy. A Binance history request is surfaced as HTTP 503
   when that upstream is unavailable, rather than returning fabricated bars.
 
+## L2 density coverage metadata
+
+- Wall records now expose the calculated per-instrument BRP, Small/Medium/Large
+  category and continuous-observation age. Density responses include received
+  bid/ask level counts and `complete_percent_range=false` with an explicit
+  top-N coverage note, so limited books are not presented as full depth.
+- Analytics regression coverage verifies BRP/category and level counts; the
+  existing stale-book behavior still clears walls on disconnect.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 

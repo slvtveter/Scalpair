@@ -72,6 +72,11 @@ class SymbolState:
     market_cap_usd: float | None = None
     market_cap_source: str | None = None
     market_cap_updated_at: float | None = None
+    # L2 coverage metadata; the connector currently receives a bounded top-N
+    # book and must never present it as full 1–10% market depth.
+    density_brp_usd: float = 0.0
+    density_bid_levels: int = 0
+    density_ask_levels: int = 0
 
     # --- rolling series ---
     price_history: deque = field(default_factory=lambda: deque(maxlen=PRICE_HISTORY_KEEP_S))

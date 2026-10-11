@@ -11,7 +11,7 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `GET /instruments?q=&exchange=&market=` | unified instrument catalog for search |
 | `GET /meta` | product info + safety statement |
 | `GET /screeners/overview` | full scanner rows (price, 5m%, NATR, speed, surge, market cap, walls, level distance, score, tag) |
-| `GET /screeners/densities?limit=` | all walls sorted by notional desc |
+| `GET /screeners/densities?limit=` | all walls sorted by notional desc, with BRP/category and explicit top-N depth coverage metadata |
 | `GET /screeners/ai-picks?top=&min_score=` | top setups + thesis |
 | `GET /screeners/score-alerts` | recent auto score≥85 alerts |
 | `GET /markets/symbols` | tracked universe |

@@ -175,8 +175,14 @@ def refresh_walls(sym_state: SymbolState, multiplier: float) -> None:
         # A missing book invalidates prior densities; never carry their age
         # across a disconnect or empty snapshot.
         sym_state.walls = {}
+        sym_state.density_brp_usd = 0.0
+        sym_state.density_bid_levels = len(sym_state.bids)
+        sym_state.density_ask_levels = len(sym_state.asks)
         return
     median = sym_state.median_level_notional()
+    sym_state.density_brp_usd = round(median, 2)
+    sym_state.density_bid_levels = len(sym_state.bids)
+    sym_state.density_ask_levels = len(sym_state.asks)
     found = detect_walls(sym_state.bids, sym_state.asks, median, multiplier)
     now_ms = sym_state.book_ts_ms or 0
     new_map: dict[tuple[str, float], dict] = {}
@@ -185,6 +191,9 @@ def refresh_walls(sym_state: SymbolState, multiplier: float) -> None:
         key = (w["side"], round(w["price"], 8))
         w["seconds_to_eat"] = seconds_to_eat_wall(w["notional_usd"], v5m)
         w["symbol"] = sym_state.symbol
+        w["brp_usd"] = round(median, 2)
+        ratio = w["notional_usd"] / median if median > 0 else 0.0
+        w["category"] = "large" if ratio >= 4 else "medium" if ratio >= 2 else "small"
         previous = sym_state.walls.get(key)
         # Age is continuous observation of this price level; a reappearing
         # level starts fresh after disappearance/reconnect.

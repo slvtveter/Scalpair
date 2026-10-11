@@ -585,6 +585,8 @@ class MarketStreamer:
                             "notional": w["notional_usd"],
                             "distance": w["distance_pct"],
                             "eat": w.get("seconds_to_eat"),
+                            "category": w.get("category"),
+                            "brp": w.get("brp_usd"),
                         }
                         for w in walls
                     ],
@@ -594,6 +596,12 @@ class MarketStreamer:
                         for z in sorted(st.cascades, key=lambda z: z.touches, reverse=True)[:10]
                     ],
                     "bookTs": st.book_ts_ms,
+                    "densityCoverage": {
+                        "kind": "top_n_levels",
+                        "levelsBid": st.density_bid_levels,
+                        "levelsAsk": st.density_ask_levels,
+                        "completePercentRange": False,
+                    },
                 }
             )
         picks = [
