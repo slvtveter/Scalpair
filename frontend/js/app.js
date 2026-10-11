@@ -1114,6 +1114,7 @@ function preferencePayload() {
     boardTf: S.boardTf,
     showLevels: S.showLevels,
     showWalls: S.showWalls,
+    sound: S.soundOn,
   };
 }
 
@@ -1137,7 +1138,8 @@ async function syncPreferences() {
     if (Number.isFinite(Number(p.boardTf))) S.boardTf = Number(p.boardTf);
     if (typeof p.showLevels === "boolean") S.showLevels = p.showLevels;
     if (typeof p.showWalls === "boolean") S.showWalls = p.showWalls;
-    for (const [key, value] of Object.entries({groups:S.groups, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls})) LS.set(key, value);
+    if (typeof p.sound === "boolean") S.soundOn = p.sound;
+    for (const [key, value] of Object.entries({groups:S.groups, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls, sound:S.soundOn})) LS.set(key, value);
     renderGroups(); renderMarketFilters(); updateSortControl(); renderBoard(); renderCoinList();
   } catch {}
 }
@@ -1200,6 +1202,7 @@ $("burger").addEventListener("click", () => {
 $("sound-toggle").addEventListener("click", (e) => {
   S.soundOn = !S.soundOn;
   LS.set("sound", S.soundOn);
+  persistPreferences();
   e.target.textContent = S.soundOn ? t("soundOn") : t("soundOff");
   if (S.soundOn) ping();
 });

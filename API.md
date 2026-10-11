@@ -25,7 +25,7 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `POST /auth/login` | → `{access_token, subscription_tier}` (JWT HS256) |
 | `GET /auth/me` | Bearer required |
 | `GET /preferences` | authenticated workspace settings and layout |
-| `PUT /preferences` | authenticated workspace settings (groups, hidden, order, filters, layout) |
+| `PUT /preferences` | authenticated workspace settings (groups, hidden, order, filters, layout, sound) |
 | `GET /watchlists` | authenticated favorite symbols |
 | `PUT /watchlists` | replace authenticated favorite symbols |
 
