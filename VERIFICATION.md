@@ -591,7 +591,7 @@ syntax/static-server checks did not establish functional or visual acceptance.
   active market.
 - The UI retains the explicit limited-depth coverage label, so a top-N book is
   not presented as complete 10% market coverage. Backend and frontend suites
-  pass: 142 and 41 tests respectively.
+  pass: 142 and 42 tests respectively.
 
 ## Multi-source market-cap enrichment
 
@@ -601,3 +601,11 @@ syntax/static-server checks did not establish functional or visual acceptance.
   universe to receive asset-level capitalization.
 - Regression coverage verifies deterministic union ordering and de-duplication;
   the backend suite now has 142 passing tests.
+
+## Frontend source-isolated price history
+
+- Snapshot price history is now keyed by complete `instrument_id`, preventing
+  duplicate Spot/Futures tickers from sharing or overwriting one another's
+  one-second chart history.
+- Regression coverage feeds two BTCUSDT rows with different identities and
+  verifies separate histories. Frontend suite: 42 passing tests.

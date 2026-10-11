@@ -398,3 +398,14 @@ test('density depth persists and source identity is used when opening a wall', (
   assert.match(a.run('preferencePayload()').densityDepth.toString(), /^10$/);
   assert.equal(a.run('typeof workspaceHas'), 'function');
 });
+
+test('frontend price history remains isolated for duplicate Spot/Futures tickers', () => {
+  const a = app();
+  a.run(`onSnapshot({type:'snapshot',feed:'multi',symbols:[
+    {symbol:'BTCUSDT',instrument_id:'BI-S:SPOT:BTCUSDT',venue:'BI-S',market:'SPOT',price:100},
+    {symbol:'BTCUSDT',instrument_id:'BY-F:FUTURES:BTCUSDT',venue:'BY-F',market:'FUTURES',price:200}
+  ]})`);
+  assert.equal(a.run('S.priceHistory.size'), 2);
+  assert.equal(a.run('S.priceHistory.get("BI-S:SPOT:BTCUSDT")[0].p'), 100);
+  assert.equal(a.run('S.priceHistory.get("BY-F:FUTURES:BTCUSDT")[0].p'), 200);
+});

@@ -296,7 +296,7 @@ function onSnapshot(snap) {
     const identity = r.instrument_id || r.symbol;
     if (r.price > 0) {
       let hist = S.priceHistory.get(identity);
-      if (!hist) { hist = []; S.priceHistory.set(r.symbol, hist); }
+      if (!hist) { hist = []; S.priceHistory.set(identity, hist); }
       const last = hist[hist.length - 1];
       if (!last || Date.now() - last.t > 1000) {
         hist.push({ t: Date.now(), p: r.price });
