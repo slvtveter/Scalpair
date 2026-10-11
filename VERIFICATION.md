@@ -287,6 +287,16 @@ syntax/static-server checks did not establish functional or visual acceptance.
   `timeframe=4h`, `historySource=exchange_rest`, `limitedHistory=false` and
   native bars from Bybit; the published `/en` markup contains the 1D option.
 
+## Timeframe cache isolation
+
+- Native board history caches are now keyed by symbol, timeframe and
+  instrument. A failed 4h/1D request cannot reuse a 1m series; it remains
+  empty/stale until the requested source responds.
+- Regression suite now has 36 passing frontend tests. After Render deployment
+  `bf07fc3`, `/api/v1/health` recovered to HTTP 200 with active Bybit data;
+  the first check observed the documented transient free-tier 502 during
+  service wake-up.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 
