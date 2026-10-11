@@ -515,3 +515,7 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - This makes the service compatible with an externally provisioned PostgreSQL
   database; the current Render service still uses its configured SQLite
   default until a database resource is attached.
+- After commit `18cb9c6`, Render briefly returned 502 while rebuilding, then
+  recovered to HTTP 200 with a fresh Bybit process, 3,639+ ingested messages,
+  one connection and zero feed errors. The transient restart is consistent
+  with the current free-tier deployment behavior.
