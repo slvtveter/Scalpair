@@ -106,8 +106,11 @@ class AlertEngine:
                             rule.last_value = 1.0 if observed is not None and observed >= rule.threshold else 0.0
                     continue
                 event_id = uuid.uuid4().hex
-                message = self._message(rule, observed)
                 instrument_id = rule.instrument_id or f"{venue_for_feed(self.state.feed_mode)}:{market_for_feed(self.state.feed_mode)}:{rule.symbol.upper()}"
+                # The source is part of the notification itself, not only the
+                # database row, so Telegram remains unambiguous with duplicate
+                # Spot/Futures tickers and a closed browser.
+                message = f"[{instrument_id}] {self._message(rule, observed)}"
                 sess.add(
                     AlertEvent(
                         rule_id=rule.id,

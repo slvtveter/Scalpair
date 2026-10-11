@@ -527,3 +527,14 @@ syntax/static-server checks did not establish functional or visual acceptance.
   symbol-only rules as applying to all sources. This prevents a BTC Spot rule
   from being mistaken for a BTC Futures rule while editing the rule list.
 - JavaScript syntax and all 40 frontend tests pass.
+
+## Source-aware Telegram delivery
+
+- Telegram alert text now includes the resolved instrument identity, for
+  example `[BI-S:SPOT:BTCUSDT]`, so browser-closed notifications distinguish
+  duplicate Spot and Futures tickers.
+- The integration test now drives a source-bound crossing through evaluation,
+  verifies one durable event and both delivery rows, then runs the Telegram
+  delivery path with a deterministic sender and verifies both rows become
+  `sent`.
+- Alert test module: 9 passed; API test module: 20 passed.

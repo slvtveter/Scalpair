@@ -260,8 +260,19 @@ async def test_real_evaluation_isolates_markets_and_queues_once(monkeypatch):
             assert len(events) == 1
             assert events[0].instrument_id == 'BI-S:SPOT:BTCUSDT'
             assert events[0].rule_type == 'price_cross_above'
+            assert events[0].message.startswith('[BI-S:SPOT:BTCUSDT]')
             deliveries = (await sess.scalars(select(NotificationDelivery))).all()
             assert sorted(d.channel for d in deliveries) == ['in_app', 'telegram']
             assert all(d.event_db_id == events[0].id for d in deliveries)
+        async def fake_send(chat_id, text):
+            assert chat_id == 'test-chat'
+            assert text.startswith('[BI-S:SPOT:BTCUSDT]')
+            return True, None
+        monkeypatch.setattr(engine, '_send_telegram', fake_send)
+        engine.telegram_configured = True
+        await engine._deliver_pending()
+        async with factory() as sess:
+            deliveries = (await sess.scalars(select(NotificationDelivery))).all()
+            assert sorted(d.status for d in deliveries) == ['sent', 'sent']
     finally:
         await database.dispose()
