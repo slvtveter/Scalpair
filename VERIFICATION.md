@@ -259,8 +259,10 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Focus now exposes a source selector and can request Binance, Bybit or OKX
   history explicitly. Alternate-source responses intentionally omit active
   venue walls/levels so overlays are never mixed with another exchange.
-  Backend regression coverage includes the alternate-source path; deployment
-  of this selector is pending.
+  Backend regression coverage includes the alternate-source path. After
+  Render deployment `9f7b98d`, `/en` contains `focus-source`; the live Bybit
+  source remains healthy. A Binance history request is surfaced as HTTP 503
+  when that upstream is unavailable, rather than returning fabricated bars.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
