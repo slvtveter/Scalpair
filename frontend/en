@@ -17,7 +17,7 @@
     <div class="toolbar-divider"></div>
     <div class="market-switch"><span class="market-dot live"></span><span>MARKETS</span><span class="chevron">⌄</span></div>
     <div class="venue-chips" id="venue-chips"><button class="venue-chip active" data-venue="ALL">ALL</button></div>
-    <div class="control-group"><span class="tb-label">TF</span><select id="board-tf" class="ctl" aria-label="Board timeframe"><option value="1">1m</option><option value="5" selected>5m</option><option value="15">15m</option><option value="60">1h</option></select></div>
+    <div class="control-group"><span class="tb-label">TF</span><select id="board-tf" class="ctl" aria-label="Board timeframe"><option value="1">1m</option><option value="3">3m</option><option value="5" selected>5m</option><option value="15">15m</option><option value="30">30m</option><option value="60">1h</option><option value="240">4h</option><option value="1440">1D</option></select></div>
     <div class="control-group"><span class="tb-label">SORT</span><select id="sort-by" class="ctl" aria-label="Sort by"><option value="score" selected>Scalp score</option><option value="surge">Volume surge</option><option value="vol1m">1m volume</option><option value="speed">Price speed</option><option value="change5m">5m change</option><option value="levelDist">To level</option></select></div>
     <button id="sort-direction" class="ctl" aria-label="Направление сортировки">↓</button>
     <div class="toolbar-spacer"></div>

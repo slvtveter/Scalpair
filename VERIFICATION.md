@@ -276,6 +276,15 @@ syntax/static-server checks did not establish functional or visual acceptance.
   returned `BY-F` walls with `category=large`, a concrete `brp_usd`, 25/25
   received levels and `complete_percent_range=false` over HTTP 200.
 
+## Native Screener timeframes
+
+- Board timeframe control now supports 1m, 3m, 5m, 15m, 30m, 1h, 4h and 1D.
+  Each card requests the selected native exchange timeframe with its current
+  instrument identity; it no longer re-aggregates a short 1m cache for the
+  board. Unknown or unavailable history remains explicitly empty/stale.
+- All 35 frontend tests, JavaScript/Python syntax checks and whitespace checks
+  pass. Production deployment verification is pending.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 

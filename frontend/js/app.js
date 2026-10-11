@@ -528,17 +528,19 @@ function moveBoardSymbol(source, target) {
 }
 
 // ------------------------- board (center) -------------------------
-async function getCandles(sym) {
+async function getCandles(sym, tfMin = 1, instrumentId = "") {
   const epoch = S.dataEpoch;
-  const cached = S.candleCache.get(sym);
+  const key = tfMin === 1 && !instrumentId ? sym : `${sym}:${tfMin}:${instrumentId || "active"}`;
+  const cached = S.candleCache.get(key) || (key === sym ? null : S.candleCache.get(sym));
   if (cached && Date.now() - cached.ts < 60000) return cached.candles;
   try {
-    const res = await fetch(`${API_BASE}/api/v1/markets/${encodeURIComponent(sym)}/candles?limit=300`, { cache: "no-store" });
+    const source = instrumentId ? `&instrument_id=${encodeURIComponent(instrumentId)}` : "";
+    const res = await fetch(`${API_BASE}/api/v1/markets/${encodeURIComponent(sym)}/candles?limit=300&timeframe=${timeframeName(tfMin)}${source}`, { cache: "no-store" });
     if (epoch !== S.dataEpoch) return [];
     if (!res.ok) return cached?.candles || [];
     const body = await res.json();
     if (epoch !== S.dataEpoch) return [];
-    S.candleCache.set(sym, { ts: Date.now(), candles: body.candles || [] });
+    S.candleCache.set(key, { ts: Date.now(), candles: body.candles || [] });
     return body.candles || [];
   } catch { return epoch === S.dataEpoch ? cached?.candles || [] : []; }
 }
@@ -769,10 +771,10 @@ function renderBoard() {
     } else if (chip) {
       chip.remove();
     }
-    getCandles(sym).then((candles) => {
+    getCandles(sym, S.boardTf, r?.instrument_id).then((candles) => {
       if (!tile.isConnected) return;
       const latest = S.bySym.get(sym);
-      paintTile(tile.querySelector("canvas"), aggregate(candles, S.boardTf), isStale(latest || {}) ? null : latest?.price, sym, boardOverlays(latest));
+      paintTile(tile.querySelector("canvas"), candles, isStale(latest || {}) ? null : latest?.price, sym, boardOverlays(latest));
     });
   }
 }
