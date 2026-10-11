@@ -3,7 +3,7 @@ import json
 from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
-from app.history import HistoryCache, aggregate_history
+from app.history import HistoryCache, aggregate_history, normalize_rows
 from app.state import Candle, MarketState
 from app.api.routes import candles
 
@@ -24,6 +24,18 @@ async def test_coalescing_and_source_timeframe_isolation():
 def test_partial_history_is_not_padded():
     rows=[Candle(0,1,2,.5,1.5,3),Candle(60000,1.5,3,1,2,4)]
     assert aggregate_history(rows,1440)==[dict(t=0,o=1,h=3,l=.5,c=2,v=7)]
+
+
+def test_history_merges_duplicate_buckets_and_sorts_out_of_order():
+    rows = [
+        {"t": 120000, "o": 3, "h": 4, "l": 2, "c": 3.5, "v": 2},
+        {"t": 0, "o": 1, "h": 2, "l": 1, "c": 1.5, "v": 1},
+        {"t": 120000, "o": 3, "h": 5, "l": 2.5, "c": 4.5, "v": 3},
+    ]
+    assert normalize_rows(rows) == [
+        {"t": 0, "o": 1, "h": 2, "l": 1, "c": 1.5, "v": 1},
+        {"t": 120000, "o": 3, "h": 5, "l": 2, "c": 4.5, "v": 5},
+    ]
 
 async def test_daily_route_and_generation_race():
     state=MarketState();state.feed_mode='bybit';st=state.get('BTCUSDT');st.on_candle(60000,100,110,90,105,20)

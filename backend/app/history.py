@@ -10,16 +10,34 @@ TIMEFRAMES = {'1m': 1, '3m': 3, '5m': 5, '15m': 15, '30m': 30, '1h': 60, '4h': 2
 
 def aggregate_history(candles, minutes):
     """Aggregate only available source bars; never fill missing historical bars."""
-    result = []
+    # Trade and kline streams can deliver the same minute out of order. Fold
+    # by bucket first so charts never expose duplicate timestamps.
+    by_bucket = {}
     width = minutes * 60000
     for c in candles:
         bucket = c.open_time // width * width
-        if not result or result[-1]['t'] != bucket:
-            result.append(dict(t=bucket, o=c.open, h=c.high, l=c.low, c=c.close, v=c.volume))
+        row = by_bucket.get(bucket)
+        if row is None:
+            by_bucket[bucket] = dict(t=bucket, o=c.open, h=c.high, l=c.low, c=c.close, v=c.volume)
         else:
-            row = result[-1]
             row.update(h=max(row['h'], c.high), l=min(row['l'], c.low), c=c.close, v=row['v'] + c.volume)
-    return result
+    return [by_bucket[key] for key in sorted(by_bucket)]
+
+
+def normalize_rows(rows):
+    """Canonicalize exchange REST candles by timestamp, oldest first."""
+    by_time = {}
+    for row in rows:
+        t = int(row["t"])
+        current = by_time.get(t)
+        if current is None:
+            by_time[t] = dict(row)
+        else:
+            current["h"] = max(current["h"], row["h"])
+            current["l"] = min(current["l"], row["l"])
+            current["c"] = row["c"]
+            current["v"] += row["v"]
+    return [by_time[key] for key in sorted(by_time)]
 
 
 class HistoryCache:
@@ -46,7 +64,7 @@ class HistoryCache:
         try:
             async with self.gate:
                 rows = await asyncio.wait_for(feed.fetch_klines(symbol, limit=limit, timeframe=timeframe), timeout=18)
-            candles = [dict(t=t, o=o, h=h, l=l, c=c, v=v) for t, o, h, l, c, v in rows]
+            candles = normalize_rows([dict(t=t, o=o, h=h, l=l, c=c, v=v) for t, o, h, l, c, v in rows])
             self.cache[key] = (time.monotonic(), candles)
             self.cache.move_to_end(key)
             while len(self.cache) > self.capacity:
