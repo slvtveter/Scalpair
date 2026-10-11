@@ -140,6 +140,14 @@ def test_multi_snapshot_keeps_secondary_instrument_identity():
     assert {row['instrument_id'] for row in rows} == {'BY-F:FUTURES:BTCUSDT', 'BI-S:SPOT:BTCUSDT'}
 
 
+def test_multi_health_counts_all_source_symbols():
+    from app.api.routes import _tracked_count
+    s = streamer()
+    s.multi_mode = True
+    s.source_symbols = {'bybit': ['BTCUSDT', 'ETHUSDT'], 'binance_spot': ['BTCUSDT']}
+    assert _tracked_count(s) == 3
+
+
 async def test_catalog_includes_source_and_skips_uninitialized_symbols():
     import json
     from types import SimpleNamespace

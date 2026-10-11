@@ -38,6 +38,14 @@ FREE_TIER_SYMBOLS = 10
 FREE_TIER_UPDATE_DIVISOR = 4  # ~15s effective delay at 0.5Hz metrics cadence
 
 
+def _tracked_count(streamer: Any) -> int:
+    if streamer is None:
+        return 0
+    if getattr(streamer, "multi_mode", False):
+        return sum(len(symbols) for symbols in streamer.source_symbols.values())
+    return len(streamer.top_symbols)
+
+
 async def _noop_feed_callback(*args: Any) -> None:
     return None
 
@@ -82,7 +90,7 @@ async def health(request: Request) -> HealthReport:
         uptime_s=round(uptime, 1),
         active_feeds=feeds,
         active_ws_clients=broadcaster.client_count,
-        tracked_symbols=len(streamer.top_symbols) if streamer else 0,
+        tracked_symbols=_tracked_count(streamer),
         messages_ingested=state.messages_ingested,
         avg_ingest_latency_ms=round(state.ingest_latency_ema_ms, 2),
         last_message_age_ms=round(last_age) if last_age is not None else None,
@@ -105,7 +113,7 @@ async def ready(request: Request) -> JSONResponse:
         {
             "ready": True,
             "feed": request.app.state.market_state.feed_mode,
-            "tracked_symbols": len(streamer.top_symbols),
+            "tracked_symbols": _tracked_count(streamer),
             "market_status": "degraded" if streamer.feed_degraded or ws_unavailable else "live",
         }
     )
@@ -120,7 +128,7 @@ async def metrics(request: Request) -> PlainTextResponse:
     stats = feed.stats if feed else None
     values = {
         "scalpair_messages_ingested_total": state.messages_ingested,
-        "scalpair_tracked_symbols": len(streamer.top_symbols) if streamer else 0,
+        "scalpair_tracked_symbols": _tracked_count(streamer),
         "scalpair_active_ws_clients": request.app.state.broadcaster.client_count,
         "scalpair_feed_degraded": int(bool(streamer and streamer.feed_degraded)),
         "scalpair_feed_messages_total": stats.messages if stats else 0,
