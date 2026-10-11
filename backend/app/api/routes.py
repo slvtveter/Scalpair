@@ -270,7 +270,7 @@ async def instruments(
         if feed is streamer.feed:
             return [(sym, request.app.state.market_state.symbols.get(sym)) for sym in streamer.top_symbols]
         try:
-            tickers = await asyncio.wait_for(feed.fetch_universe(streamer.settings.top_symbols), timeout=12)
+            tickers = await asyncio.wait_for(feed.fetch_universe(streamer.settings.top_symbols), timeout=5)
             return [(row.get("symbol"), row) for row in tickers]
         except Exception:
             return []

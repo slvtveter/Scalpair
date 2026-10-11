@@ -1281,7 +1281,7 @@ async function loadSearchCatalog() {
   if (catalogRequest?.epoch === epoch) return catalogRequest.promise;
   const promise = (async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/instruments?all_sources=true`, {signal: AbortSignal.timeout(12000)});
+      const res = await fetch(`${API_BASE}/api/v1/instruments?all_sources=true`, {signal: AbortSignal.timeout(8000)});
       if (!res.ok) return;
       const body = await res.json();
       if (epoch !== S.dataEpoch) return;
