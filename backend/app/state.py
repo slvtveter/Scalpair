@@ -112,7 +112,13 @@ class SymbolState:
 
     def on_trade(self, ts_ms: float, price: float, qty: float, is_buyer_maker: bool) -> None:
         self.price = price
-        self.price_history.append((ts_ms, price))
+        # Keep one latest observation per second. A trade-sized deque loses
+        # minute lookbacks within seconds on busy markets such as BTCUSDT.
+        previous = self.price_history[-1] if self.price_history else None
+        if previous is None or ts_ms // 1000 > previous[0] // 1000:
+            self.price_history.append((ts_ms, price))
+        elif ts_ms >= previous[0]:
+            self.price_history[-1] = (ts_ms, price)
         notional = price * qty
         key = minute_bucket(ts_ms)
         b = self.buckets.get(key)

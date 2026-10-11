@@ -56,7 +56,9 @@ def price_speed_pct_per_min(history: list[tuple[float, float]], window_s: int, n
         ref = history[0][1]
     if ref <= 0:
         return None
-    elapsed_min = max((now_s - history[0][0] / 1000) / 60.0, window_s / 60.0)
+    # Older retained samples must not dilute a speed reading for the
+    # requested lookback window.
+    elapsed_min = window_s / 60.0
     return round(100.0 * (history[-1][1] / ref - 1) / elapsed_min, 4)
 
 
