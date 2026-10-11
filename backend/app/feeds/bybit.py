@@ -34,6 +34,7 @@ class BybitLinearFeed(FeedConnector):
     category = "linear"
     keepalive_payload = {"op": "ping"}
     keepalive_interval = 20.0
+    ws_origin = "https://www.bybit.com"
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

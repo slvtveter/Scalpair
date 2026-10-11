@@ -65,6 +65,9 @@ class FeedConnector:
     ws_url: str = ""
     keepalive_payload: dict[str, Any] | None = None  # e.g. Bybit {"op": "ping"}
     keepalive_interval: float = 20.0
+    # Some exchange edge proxies reject a websocket handshake without an
+    # Origin header. Connectors can opt in without affecting other venues.
+    ws_origin: str | None = None
 
     def __init__(
         self,
@@ -116,13 +119,18 @@ class FeedConnector:
         attempt = 0
         while not self._stop.is_set():
             try:
+                connect_kwargs = {
+                    "ping_interval": self.ping_interval,
+                    "ping_timeout": 10,
+                    "close_timeout": 5,
+                    "max_queue": 4096,
+                    "compression": None,
+                }
+                if self.ws_origin:
+                    connect_kwargs["origin"] = self.ws_origin
                 async with websockets.connect(
                     self.ws_url,
-                    ping_interval=self.ping_interval,
-                    ping_timeout=10,
-                    close_timeout=5,
-                    max_queue=4096,
-                    compression=None,
+                    **connect_kwargs,
                 ) as ws:
                     self._ws = ws
                     self.stats.connects += 1
