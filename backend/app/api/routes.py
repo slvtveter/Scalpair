@@ -205,7 +205,11 @@ async def ai_picks(
 async def overview(request: Request) -> JSONResponse:
     """Full terminal table payload (same shape as the WS snapshot symbols array)."""
     streamer = request.app.state.streamer
-    return JSONResponse({"ts": int(time.time() * 1000), "symbols": streamer.build_snapshot()["symbols"]})
+    # Reuse the snapshot produced by the metrics loop. Rebuilding all walls,
+    # levels and picks in the request path can starve the event loop on a free
+    # Render instance while the upstream feed is busy.
+    snapshot = streamer._last_snapshot or streamer.build_snapshot()
+    return JSONResponse({"ts": int(time.time() * 1000), "symbols": snapshot["symbols"]})
 
 
 @router.get("/screeners/score-alerts")

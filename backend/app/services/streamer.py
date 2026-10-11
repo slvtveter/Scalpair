@@ -54,6 +54,7 @@ class MarketStreamer:
         self.multi_mode = False
         self.source_states: dict[str, MarketState] = {}
         self.source_symbols: dict[str, list[str]] = {}
+        self._last_snapshot: dict[str, Any] | None = None
         self.top_symbols: list[str] = []
         self._tasks: list[asyncio.Task] = []
         self._stop = asyncio.Event()
@@ -772,7 +773,7 @@ class MarketStreamer:
             }
             for p in self.scorer.top(5)
         ]
-        return {
+        snapshot = {
             "type": "snapshot",
             "ts": now_ms,
             "feed": "multi" if self.multi_mode else self.state.feed_mode,
@@ -787,3 +788,5 @@ class MarketStreamer:
                 "latencyMs": round(self.state.ingest_latency_ema_ms, 1),
             },
         }
+        self._last_snapshot = snapshot
+        return snapshot
