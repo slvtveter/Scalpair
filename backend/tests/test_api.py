@@ -78,6 +78,15 @@ class TestScreeners:
         for field in ("symbol", "price", "imbalance", "walls", "score"):
             assert field in row
 
+    def test_overview_uses_prepared_snapshot_payload(self, client):
+        streamer = client.app.state.streamer
+        assert streamer._last_overview_body
+        before = streamer._last_overview_body
+        response = client.get("/api/v1/screeners/overview")
+        assert response.status_code == 200
+        assert response.content == before
+        assert streamer._last_overview_body is before
+
     def test_densities(self, client):
         r = client.get("/api/v1/screeners/densities")
         assert r.status_code == 200
