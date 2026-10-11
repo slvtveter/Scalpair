@@ -259,10 +259,14 @@ async def instruments(
         "OK-F": OkxSwapFeed, "DEMO": MockFeed,
     }
     callbacks = FeedCallbacks(_noop_feed_callback, _noop_feed_callback, _noop_feed_callback, _noop_feed_callback, _noop_feed_callback)
+    active_venue = venue_for_feed(streamer.feed.name) if streamer.feed else ""
     if source_filter in source_map:
-        requested = [source_map[source_filter](callbacks)]
+        requested = [streamer.feed] if streamer.feed and active_venue == source_filter else [source_map[source_filter](callbacks)]
     elif all_sources:
-        requested = [cls(callbacks) for venue, cls in source_map.items() if venue != "DEMO"]
+        requested = ([streamer.feed] if streamer.feed else []) + [
+            cls(callbacks) for venue, cls in source_map.items()
+            if venue != "DEMO" and venue != active_venue
+        ]
     else:
         requested = [streamer.feed] if streamer.feed else []
 
