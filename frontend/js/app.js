@@ -122,6 +122,7 @@ const S = {
   hoverUntil: 0,
   connected: false,
   feedDegraded: false,
+  sourceHealth: {},
   sourceGeneration: null,
   dataEpoch: 0,
   lastSnapshotAt: 0,
@@ -282,7 +283,8 @@ function onSnapshot(snap) {
     document.querySelectorAll(".density-pill.dynamic").forEach(el => el.remove());
   }
   S.sourceGeneration = snap.sourceGeneration ?? null;
-  S.feedDegraded = Boolean(snap.feedDegraded);
+  S.sourceHealth = snap.sourceHealth || {};
+  S.feedDegraded = Boolean(snap.feedDegraded) || Object.values(S.sourceHealth).some((source) => source.status === "degraded");
   S.lastSnapshotAt = Date.now();
   S.feed = snap.feed || S.feed;
   S.symbols = snap.symbols || [];

@@ -708,6 +708,36 @@ class MarketStreamer:
     # ------------------------------------------------------------------
     # Snapshot serialization
     # ------------------------------------------------------------------
+    def _source_health_snapshot(self) -> dict[str, dict[str, Any]]:
+        """Expose freshness/transport state alongside every live snapshot."""
+        feeds = ([self.feed] if self.feed else []) + list(self.extra_feeds)
+        health: dict[str, dict[str, Any]] = {}
+        for feed in feeds:
+            state = self.source_states.get(feed.name, self.state)
+            age = state.message_age_ms()
+            stats = getattr(feed, "stats", None)
+            errors = int(getattr(stats, "errors", 0) or 0)
+            connects = int(getattr(stats, "connects", 0) or 0)
+            reconnects = int(getattr(stats, "reconnects", 0) or 0)
+            messages = int(getattr(stats, "messages", 0) or 0)
+            last_error = str(getattr(stats, "last_error", "") or "")
+            if errors or (age is not None and age >= 30_000):
+                status = "degraded"
+            elif age is None and connects == 0:
+                status = "connecting"
+            else:
+                status = "ok"
+            health[feed.name] = {
+                "status": status,
+                "messages": state.messages_ingested,
+                "lastMessageAgeMs": round(age) if age is not None else None,
+                "connects": connects,
+                "reconnects": reconnects,
+                "errors": errors,
+                "lastError": last_error,
+            }
+        return health
+
     def build_snapshot(self) -> dict[str, Any]:
         now_ms = time.time() * 1000
         feed_name = self.feed.name if self.feed else ""
@@ -816,6 +846,7 @@ class MarketStreamer:
             "ts": now_ms,
             "feed": "multi" if self.multi_mode else self.state.feed_mode,
             "feedDegraded": self.feed_degraded,
+            "sourceHealth": self._source_health_snapshot(),
             "sourceGeneration": self._generation,
             "symbols": symbols,
             "picks": picks,

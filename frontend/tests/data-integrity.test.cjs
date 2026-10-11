@@ -409,3 +409,10 @@ test('frontend price history remains isolated for duplicate Spot/Futures tickers
   assert.equal(a.run('S.priceHistory.get("BI-S:SPOT:BTCUSDT")[0].p'), 100);
   assert.equal(a.run('S.priceHistory.get("BY-F:FUTURES:BTCUSDT")[0].p'), 200);
 });
+
+test('multi-source snapshot marks an unhealthy source as a degraded feed', () => {
+  const a = app();
+  a.run(`onSnapshot({type:'snapshot',feed:'multi',feedDegraded:false,sourceHealth:{
+    bybit:{status:'ok'},binance_spot:{status:'degraded'}},symbols:[]})`);
+  assert.equal(a.run('S.feedDegraded'), true);
+});

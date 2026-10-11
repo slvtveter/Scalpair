@@ -609,3 +609,12 @@ syntax/static-server checks did not establish functional or visual acceptance.
   one-second chart history.
 - Regression coverage feeds two BTCUSDT rows with different identities and
   verifies separate histories. Frontend suite: 42 passing tests.
+
+## WebSocket source freshness indicator
+
+- Live snapshots now include per-source transport and freshness diagnostics;
+  the frontend marks the whole feed as incomplete when any multi-source adapter
+  reports a degraded status. This keeps stale secondary markets visible while
+  the user remains on the screener.
+- The implementation tolerates lightweight test/demo connectors without feed
+  stats. Frontend suite: 43 tests; backend suite: 142 tests.
