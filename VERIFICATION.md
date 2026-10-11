@@ -226,8 +226,11 @@ syntax/static-server checks did not establish functional or visual acceptance.
   market cap and keeps `N/A` values at the end.
 - Docker smoke run with the mock feed returned a live BTC market cap with
   `marketCapSource=coingecko`; Python compilation, `git diff --check` and all
-  35 frontend tests passed. Production deployment verification is still
-  pending for this change.
+  35 frontend tests passed.
+- After Render deployment `b5c113b`, `/api/v1/instruments?q=BTC` returned
+  `market_cap_usd`, `market_cap_source=coingecko` and
+  `market_cap_updated_at` with HTTP 200; `/api/v1/health` was HTTP 200 with
+  an active Bybit feed.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
