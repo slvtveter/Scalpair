@@ -6,6 +6,9 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | Endpoint | Description |
 |---|---|
 | `GET /health` | feed mode, latency, ingest counters, ws clients, redis state |
+| `GET /ready` | process readiness and market freshness state |
+| `GET /metrics` | Prometheus-compatible ingest/feed counters |
+| `GET /instruments?q=&exchange=&market=` | unified instrument catalog for search |
 | `GET /meta` | product info + safety statement |
 | `GET /screeners/overview` | full scanner rows (price, 5m%, NATR, speed, surge, walls, level distance, score, tag, walls[]) |
 | `GET /screeners/densities?limit=` | all walls sorted by notional desc |
@@ -21,12 +24,17 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `POST /auth/register` `{email, password}` | 201; 409 duplicate; rate-limited 10/min/IP |
 | `POST /auth/login` | → `{access_token, subscription_tier}` (JWT HS256) |
 | `GET /auth/me` | Bearer required |
+| `GET /preferences` | authenticated workspace settings and layout |
+| `PUT /preferences` | authenticated workspace settings (groups, hidden, order, filters, layout) |
+| `GET /watchlists` | authenticated favorite symbols |
+| `PUT /watchlists` | replace authenticated favorite symbols |
 
 ## Alert rules (Bearer required)
 | Endpoint | Description |
 |---|---|
 | `POST /alerts` | `{symbol, rule_type: price_cross_above\|price_cross_below\|pct_move\|volume_surge\|score_above, threshold, window_s?, cooldown_s?, recurring?}` |
 | `GET /alerts` | user rules (Bearer) |
+| `PATCH /alerts/{id}` | update enabled, threshold, cooldown or recurring (owner only) |
 | `DELETE /alerts/{id}` | 404 if not owner |
 | `GET /notifications` | in-app inbox: events + delivery statuses (`in_app:sent`, `telegram:sent\|failed\|unconfigured`) |
 | `POST /telegram/link` | `{configured, link_url?}` — honestly `unconfigured` without `TELEGRAM_BOT_TOKEN` |

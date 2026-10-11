@@ -1,4 +1,4 @@
-# Verification record — 2026-10-10
+# Verification record — 2026-10-11
 
 The implementation is **not yet complete against Scalpair_TZ_RU.md**. Earlier
 syntax/static-server checks did not establish functional or visual acceptance.
@@ -7,7 +7,7 @@ syntax/static-server checks did not establish functional or visual acceptance.
 
 - Current backend suite: `python -m pytest -o addopts='' -q` in `backend/` passed (115 tests; 3 dependency/test-key warnings).
 - Following source-label changes: `python -m pytest -q tests/test_instruments.py tests/test_api.py` passed.
-- `node --test frontend/tests/data-integrity.test.cjs`: 31 tests passed.
+- `node --test frontend/tests/data-integrity.test.cjs`: 35 tests passed.
 - Offline frontend rendered in headless Chrome at 1600×1000.
 - Chrome/CDP with the backend in explicit mock mode: 9 board tiles, DEMO
   label, no horizontal overflow, Focus opens and receives candles; zero runtime
@@ -106,8 +106,26 @@ syntax/static-server checks did not establish functional or visual acceptance.
   runtime exceptions. Screenshot of the open filter panel inspected.
 - Browser form checks used explicitly injected DEMO fixtures with the API
   offline; this does not establish real exchange data coverage.
-- Account-synced presets, market-cap data/filter, configurable metric periods
-  and per-market simultaneous feeds remain outstanding specification work.
+- Account-synced groups, hidden symbols, order, filters and watchlists are
+  implemented through authenticated `/preferences` and `/watchlists` APIs.
+  Market-cap data/filter, configurable metric periods and per-market
+  simultaneous feeds remain outstanding specification work.
+
+## Latest production checks
+
+- Render `/health`, `/ready` and `/metrics` returned HTTP 200 with active
+  Bybit data; a live sample recorded 82k+ ingested messages and no active feed
+  errors.
+- `/instruments?q=BTC` returned `BY-F:FUTURES:BTCUSDT` with live price and
+  quote volume.
+- `/markets/BTCUSDT/candles?limit=100&timeframe=1m` returned 100 sorted,
+  unique timestamps after candle normalization.
+- Chrome checks at 1440px and 390px verified sidebar tab switching, no runtime
+  exceptions and no horizontal overflow. Alerts list, pause/resume and delete
+  server rules from the UI.
+- Docker smoke tests covered authenticated watchlist/preferences persistence
+  and alert create/PATCH/DELETE. Telegram delivery still requires a configured
+  bot token and chat handshake.
 
 ## Search independent of the board
 
