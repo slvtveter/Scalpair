@@ -123,6 +123,11 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements-dev.txt
 Environment knobs (see `.env.example`): `DATA_FEED`, `TOP_SYMBOLS`, `ML_SCORE_INTERVAL`,
 `WALL_MULTIPLIER`, `WS_BROADCAST_RATE`, `REDIS_URL`, `DATABASE_URL`, `JWT_SECRET`.
 
+The Render blueprint uses `DATA_FEED=multi` with ten instruments per source.
+Binance Futures/Spot, Bybit Futures/Spot and OKX Futures remain isolated and
+are merged only at snapshot serialization. Lower `TOP_SYMBOLS` on small
+instances if upstream connection budgets require it.
+
 `DATABASE_URL` may be a local `sqlite+aiosqlite:///...` URL or a platform
 PostgreSQL URL (`postgres://...` / `postgresql://...`); PostgreSQL URLs are
 normalized to the asyncpg driver at startup. Use PostgreSQL for persistent

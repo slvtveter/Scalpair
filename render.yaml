@@ -18,9 +18,9 @@ services:
     autoDeploy: true
     envVars:
       - key: DATA_FEED
-        value: auto
+        value: multi
       - key: TOP_SYMBOLS
-        value: "30" # 50 on paid plans
+        value: "10" # 30 on paid plans; each source keeps its own identity
       - key: ML_SCORE_INTERVAL
         value: "15"
       - key: WS_BROADCAST_RATE

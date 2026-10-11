@@ -555,6 +555,20 @@ syntax/static-server checks did not establish functional or visual acceptance.
   load and per-source live freshness still require validation before changing
   the deployment default.
 
+## Multi-source scale smoke test (`TOP_SYMBOLS=10`)
+
+- Local ASGI run with the Render baseline (`DATA_FEED=multi`, ten instruments
+  per source) activated Binance Futures, Bybit Futures, Binance Spot, Bybit
+  Spot and OKX Futures simultaneously.
+- Health reported 50 source-specific instruments, all five sources `ok`, one
+  connection per source and zero feed errors. Ingest counts were non-zero for
+  every source (3,788 / 18,280 / 1,556 / 6,787 / 10,843 at the sample).
+- Warm overview responses were 58 KB and completed in 0.5–0.7 ms locally;
+  this is a local baseline, not a Render free-tier SLO guarantee.
+- `render.yaml` now defaults to this multi-source baseline. The existing
+  Render dashboard environment must be synchronized if it still overrides
+  `DATA_FEED=bybit`.
+
 ## Multi-source cascade calculation
 
 - Multi startup now launches the level engine, previously absent from its task
