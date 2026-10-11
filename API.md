@@ -36,7 +36,7 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `GET /alerts` | user rules (Bearer) |
 | `PATCH /alerts/{id}` | update enabled, threshold, cooldown or recurring (owner only) |
 | `DELETE /alerts/{id}` | 404 if not owner |
-| `GET /notifications` | in-app inbox: events + delivery statuses (`in_app:sent`, `telegram:sent\|failed\|unconfigured`) |
+| `GET /notifications` | in-app inbox: events with `instrument_id` + delivery statuses (`in_app:sent`, `in_app:muted`, `telegram:sent\|failed\|unconfigured`) |
 | `POST /telegram/link` | `{configured, link_url?}` — honestly `unconfigured` without `TELEGRAM_BOT_TOKEN` |
 | `DELETE /telegram/link` | unlink |
 

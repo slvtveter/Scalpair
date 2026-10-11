@@ -208,6 +208,7 @@ async def notifications(user: AUTHORIZED) -> dict[str, Any]:
                     "event_id": e.event_id,
                     "ts": e.ts,
                     "symbol": e.symbol,
+                    "instrument_id": e.instrument_id,
                     "rule_type": e.rule_type,
                     "message": e.message,
                     "delivery": by_event.get(e.id, []),

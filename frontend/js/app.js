@@ -956,7 +956,7 @@ function renderAlertsInline() {
   const rulesHtml = rules.length ? `<div class="alert-rules">${rules.map(rule => `<div class="alert-rule ${rule.enabled ? "" : "muted"}"><div><b>${esc(rule.symbol)}</b><span class="delivery">${esc(rule.rule_type)}</span></div><label class="rule-edit-field"><span>threshold</span><input type="number" step="any" min="0.00000001" value="${Number(rule.threshold)}" data-rule-threshold="${rule.id}" /></label><label class="rule-edit-field"><span>cooldown</span><input type="number" step="1" min="30" value="${Number(rule.cooldown_s)}" data-rule-cooldown="${rule.id}" /></label><button class="ctl ctl-btn rule-save" data-rule-save="${rule.id}">Save</button><button class="ctl ctl-btn rule-toggle" data-rule-toggle="${rule.id}">${rule.enabled ? "Pause" : "Enable"}</button><button class="ctl ctl-btn rule-delete" data-rule-delete="${rule.id}">Delete</button></div>`).join("")}</div>` : `<div class="notif-empty">${S.lang === "ru" ? "Правил нет" : "No alert rules"}</div>`;
   el.innerHTML = rulesHtml + (items.length
     ? items.map((n) => `
-      <div class="notif-item"><b>${esc(n.symbol)}</b> ${esc(n.message)}
+      <div class="notif-item"><b>${esc(n.symbol)}</b> <span class="dim">${esc(n.instrument_id || "")}</span> ${esc(n.message)}
         <div class="delivery">${new Date(n.ts * 1000).toLocaleTimeString()} · ${esc(n.delivery.join(", "))}</div>
       </div>`).join("")
     : `<div class="notif-empty">${t("notifEmpty")}</div>`);

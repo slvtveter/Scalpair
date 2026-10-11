@@ -309,6 +309,17 @@ syntax/static-server checks did not establish functional or visual acceptance.
   `overlaysSource=active_live_feed` over HTTP 200. Alternate-source 503s
   remain explicit when an upstream cannot serve the requested history.
 
+## Instrument-bound alert audit
+
+- `AlertEvent` now stores the resolved `instrument_id` at trigger time, and
+  `/notifications` returns it beside the ticker and delivery statuses.
+- Existing SQLite databases receive a nullable column and index during startup;
+  old events remain readable. The alert engine keeps the source binding for
+  legacy symbol-only rules by resolving the active venue at trigger time.
+- Python/JavaScript syntax, 36 frontend tests and whitespace checks pass;
+  Docker startup smoke verifies the schema migration path. Production
+  verification is pending.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 

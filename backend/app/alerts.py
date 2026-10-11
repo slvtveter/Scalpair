@@ -94,6 +94,7 @@ class AlertEngine:
                     continue
                 event_id = uuid.uuid4().hex
                 message = self._message(rule, observed)
+                instrument_id = rule.instrument_id or f"{venue_for_feed(self.state.feed_mode)}:FUTURES:{rule.symbol.upper()}"
                 sess.add(
                     AlertEvent(
                         rule_id=rule.id,
@@ -101,6 +102,7 @@ class AlertEngine:
                         event_id=event_id,
                         ts=now_s,
                         symbol=rule.symbol,
+                        instrument_id=instrument_id,
                         rule_type=rule.rule_type,
                         message=message,
                     )

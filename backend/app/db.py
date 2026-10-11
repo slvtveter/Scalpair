@@ -101,6 +101,7 @@ class AlertEvent(Base):
     event_id: Mapped[str] = mapped_column(String(64), unique=True)  # idempotency
     ts: Mapped[float] = mapped_column(Float, index=True)
     symbol: Mapped[str] = mapped_column(String(32))
+    instrument_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     rule_type: Mapped[str] = mapped_column(String(32))
     message: Mapped[str] = mapped_column(String(512))
 
@@ -174,6 +175,10 @@ async def init_db(database_url: str) -> None:
             if "instrument_id" not in columns:
                 await conn.execute(text("ALTER TABLE alert_rules ADD COLUMN instrument_id VARCHAR(128)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_alert_rules_instrument_id ON alert_rules (instrument_id)"))
+            event_columns = {row[1] for row in (await conn.execute(text("PRAGMA table_info(alert_events)"))).all()}
+            if "instrument_id" not in event_columns:
+                await conn.execute(text("ALTER TABLE alert_events ADD COLUMN instrument_id VARCHAR(128)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_alert_events_instrument_id ON alert_events (instrument_id)"))
             await conn.execute(text("PRAGMA journal_mode=WAL"))
     log.info("database ready (%s)", database_url.split("://")[0])
 
