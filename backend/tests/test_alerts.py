@@ -211,3 +211,12 @@ def test_instrument_binding_rejects_wrong_source(state):
     assert engine._rule_matches_instrument(mk_rule(instrument_id="DEMO:FUTURES:BTCUSDT"))
     assert not engine._rule_matches_instrument(mk_rule(instrument_id="BINANCE:FUTURES:BTCUSDT"))
     assert engine._rule_matches_instrument(mk_rule(instrument_id=None))
+
+
+def test_instrument_binding_resolves_isolated_source_state(state):
+    secondary = MarketState()
+    secondary.feed_mode = "binance_spot"
+    engine = AlertEngine(state, Settings(), scorer=None, source_provider=lambda: {"binance_spot": secondary})
+    rule = mk_rule(instrument_id="BI-S:SPOT:BTCUSDT")
+    assert engine._state_for_rule(rule) is secondary
+    assert engine._rule_matches_instrument(rule, secondary)
