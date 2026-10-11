@@ -750,7 +750,7 @@ function renderBoard() {
     _boardSig = sig;
     _boardTf = S.boardTf;
     grid.innerHTML = slice.map((r) => `
-      <div class="board-tile" data-sym="${esc(r.symbol)}" tabindex="0" role="button" aria-label="Focus: ${esc(r.symbol)}">
+      <div class="board-tile" data-sym="${esc(r.symbol)}" data-instrument="${esc(r.instrument_id || "")}" tabindex="0" role="button" aria-label="Focus: ${esc(r.symbol)}">
         <div class="tile-head">
           <span class="tile-id"><span class="star ${S.watch.has(r.symbol) ? "on" : ""}" data-star="${esc(r.symbol)}">${S.watch.has(r.symbol) ? "★" : "☆"}</span> <b>${esc(r.symbol.replace(/USDT$/, ""))}</b><em class="tile-venue">${esc(r.venue || r.exchange || "—")}</em></span>
           <span class="tc ${cls(r.change5m)}">${fmtPct(r.change5m, 1)}</span>
@@ -846,12 +846,12 @@ $("board-grid").addEventListener("click", (e) => {
     return;
   }
   const tile = e.target.closest(".board-tile");
-  if (tile) openChart(tile.dataset.sym);
+  if (tile) openChart(tile.dataset.sym, tile.dataset.instrument || "");
 });
 $("board-grid").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
   const tile = e.target.closest(".board-tile");
-  if (tile) { e.preventDefault(); openChart(tile.dataset.sym); }
+  if (tile) { e.preventDefault(); openChart(tile.dataset.sym, tile.dataset.instrument || ""); }
 });
 $("grid-size").addEventListener("change", (e) => { S.gridSize = +e.target.value; LS.set("grid", S.gridSize); persistPreferences(); S.page = 0; _boardSig = ""; renderBoard(); });
 $("board-tf").addEventListener("change", (e) => { S.boardTf = +e.target.value; LS.set("boardTf", S.boardTf); persistPreferences(); S.page = 0; _boardSig = ""; renderBoard(); });
@@ -887,7 +887,7 @@ function renderCoinList() {
       : "";
     const stale = isStale(r) ? `<span class="tile-stale">${t("stale")}</span>` : "";
     return `
-    <div class="coin-row" style="border-left:2px solid ${groupColor(r.symbol)}" data-sym="${esc(r.symbol)}" tabindex="0" role="button" aria-label="Focus: ${esc(r.symbol)}">
+    <div class="coin-row" style="border-left:2px solid ${groupColor(r.symbol)}" data-sym="${esc(r.symbol)}" data-instrument="${esc(r.instrument_id || "")}" tabindex="0" role="button" aria-label="Focus: ${esc(r.symbol)}">
       <div class="cr-top">
         <span class="star ${S.watch.has(r.symbol) ? "on" : ""}" data-star="${esc(r.symbol)}">${star}</span>
         <b>${esc(ticker)}</b><em class="row-venue">${esc(venue)}</em>${stale}
@@ -915,12 +915,12 @@ $("tab-coins").addEventListener("click", (e) => {
     return;
   }
   const row = e.target.closest(".coin-row");
-  if (row) openChart(row.dataset.sym);
+  if (row) openChart(row.dataset.sym, row.dataset.instrument || "");
 });
 $("tab-coins").addEventListener("keydown", (e) => {
   if (e.key !== "Enter" && e.key !== " ") return;
   const row = e.target.closest(".coin-row");
-  if (row) { e.preventDefault(); openChart(row.dataset.sym); }
+  if (row) { e.preventDefault(); openChart(row.dataset.sym, row.dataset.instrument || ""); }
 });
 
 function setIfChanged(el, html) {
@@ -1303,7 +1303,7 @@ function renderSearch() {
   if (!S.searchQuery) { closeSearch(); return; }
   const rows = searchMarkets(S.searchQuery);
   S.searchIndex = Math.max(0, Math.min(S.searchIndex, rows.length - 1));
-  $("search-results").innerHTML = rows.length ? rows.map((row,i) => `<button type="button" role="option" tabindex="-1" id="search-option-${i}" aria-selected="${i === S.searchIndex}" data-search-symbol="${esc(row.symbol)}"><b>${esc(row.symbol)}</b><span>${esc(row.venue || "—")}</span><span>${fmtPrice(row.price)}</span>${S.hidden.has(row.symbol) ? `<small>${S.lang === "ru" ? "Скрыт с доски" : "Hidden from board"}</small>` : ''}</button>`).join("") : `<p>${S.lang === "ru" ? "Нет совпадений в доступном каталоге" : "No matches in the available catalog"}</p>`;
+  $("search-results").innerHTML = rows.length ? rows.map((row,i) => `<button type="button" role="option" tabindex="-1" id="search-option-${i}" aria-selected="${i === S.searchIndex}" data-search-symbol="${esc(row.symbol)}" data-search-instrument="${esc(row.instrument_id || "")}"><b>${esc(row.symbol)}</b><span>${esc(row.venue || "—")}${row.market ? ` · ${esc(row.market)}` : ""}</span><span>${fmtPrice(row.price)}</span>${S.hidden.has(row.symbol) ? `<small>${S.lang === "ru" ? "Скрыт с доски" : "Hidden from board"}</small>` : ''}</button>`).join("") : `<p>${S.lang === "ru" ? "Нет совпадений в доступном каталоге" : "No matches in the available catalog"}</p>`;
   $("search-results").classList.remove("hidden");
   $("search").setAttribute("aria-expanded", "true");
   if (rows.length) $("search").setAttribute("aria-activedescendant", `search-option-${S.searchIndex}`);
@@ -1326,11 +1326,11 @@ $("search").addEventListener("keydown", e => {
     e.preventDefault(); S.searchIndex = (S.searchIndex + (e.key === "ArrowDown" ? 1 : -1) + rows.length) % Math.max(1, rows.length); renderSearch();
     document.getElementById(`search-option-${S.searchIndex}`)?.scrollIntoView({block:"nearest"});
   }
-  if (e.key === "Enter" && rows[S.searchIndex]) { e.preventDefault(); closeSearch(); openChart(rows[S.searchIndex].symbol); }
+  if (e.key === "Enter" && rows[S.searchIndex]) { e.preventDefault(); closeSearch(); openChart(rows[S.searchIndex].symbol, rows[S.searchIndex].instrument_id || ""); }
 });
 $("search-results").addEventListener("click", e => {
   const result = e.target.closest("[data-search-symbol]");
-  if (result) { closeSearch(); openChart(result.dataset.searchSymbol); }
+  if (result) { closeSearch(); openChart(result.dataset.searchSymbol, result.dataset.searchInstrument || ""); }
 });
 document.addEventListener("click", e => {
   if (!e.target.closest(".search-wrap") && !e.target.closest("#search-results")) closeSearch();
@@ -1358,12 +1358,14 @@ document.querySelectorAll(".view-chip").forEach((btn, index) => btn.addEventList
 // ------------------------- focus modal -------------------------
 const modal = $("chart-modal");
 let chartSym = null;
+let chartInstrumentId = "";
 let focusReturn = null;
 const focusSourceSelect = $("focus-source");
 const focusVenueNames = {"BI-F":"Binance Futures", "BI-S":"Binance Spot", "BY-F":"Bybit Futures", "BY-S":"Bybit Spot", "OK-F":"OKX Futures", "DEMO":"Demo"};
 function focusMarketForVenue(venue) { return venue?.endsWith("-S") ? "SPOT" : "FUTURES"; }
 function focusInstrumentId() {
   const row = S.bySym.get(chartSym);
+  if (chartInstrumentId) return chartInstrumentId;
   const venue = S.focusVenue || row?.venue || "UNKNOWN";
   return chartSym ? `${venue}:${focusMarketForVenue(venue)}:${chartSym}` : "";
 }
@@ -1489,17 +1491,18 @@ function setHistoryStatus(text, chart = focusPanes[0]) {
   chart.historyStatus = text; $(chart.index ? `chart-history-status-${chart.index}` : "chart-history-status").textContent = text;
 }
 
-async function openChart(symbol) {
+async function openChart(symbol, instrumentId = "") {
   if (!S.focusOpen) focusReturn = document.activeElement;
   S.focusOpen = true;
   chartSym = symbol;
+  chartInstrumentId = instrumentId || S.bySym.get(symbol)?.instrument_id || "";
   setDrawingTool("none");
   loadServerDrawings(symbol);
   updateHiddenControl();
   updateChartGroupControl();
-  const r = S.bySym.get(symbol);
+  const r = S.symbols.find((row) => row.instrument_id === chartInstrumentId) || S.bySym.get(symbol);
   setupFocusSource(r);
-  const pick = S.picks.find((p) => p.symbol === symbol);
+  const pick = S.picks.find((p) => p.symbol === symbol && (!chartInstrumentId || !p.instrument_id || p.instrument_id === chartInstrumentId)) || S.picks.find((p) => p.symbol === symbol);
   $("chart-title").textContent = `${symbol} · ${focusVenueNames[S.focusVenue] || S.focusVenue || r?.venue || "—"} · ${r?.market || "FUTURES"} · ${timeframeName(chart.tfMin)}`;
   $("chart-tag").textContent = pick?.tag || r?.tag || "—";
   $("chart-tag").className = `tag-cell ${tagClass(pick?.tag || r?.tag)}`;
@@ -1548,7 +1551,7 @@ async function refreshChart(resetView = false, chart = focusPanes[0]) {
 function closeChart() {
   if (!S.focusOpen) return;
   if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
-  modal.classList.add("hidden"); focusSourceSelect.classList.add("hidden"); chartSym = null; S.focusOpen = false;
+  modal.classList.add("hidden"); focusSourceSelect.classList.add("hidden"); chartSym = null; chartInstrumentId = ""; S.focusOpen = false;
   if (focusReturn?.isConnected) focusReturn.focus();
   else $("search").focus();
 }
