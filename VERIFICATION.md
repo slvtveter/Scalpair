@@ -251,7 +251,11 @@ syntax/static-server checks did not establish functional or visual acceptance.
   shows venue/market in the Focus title. The backend rejects a stale source
   identity with HTTP 409 instead of silently mixing history across venues.
 - Added a regression test for the mismatch path; Python/JavaScript syntax,
-  frontend tests and diff checks pass. Production deployment is pending.
+  frontend tests and diff checks pass. Docker smoke returned HTTP 200 for the
+  matching `DEMO:FUTURES:BTCUSDT` and HTTP 409 for a stale `BY-F` identity.
+- After Render deployment `de9e638`, the live candle endpoint returned HTTP
+  200 with `instrument_id=BY-F:FUTURES:BTCUSDT`, `venue=BY-F` and
+  `market=FUTURES`; a mismatched source is guarded by the same 409 contract.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
