@@ -134,6 +134,26 @@ class TestAuth:
         assert client.get("/api/v1/drawings/BTCUSDT", headers=headers).json()["drawings"] == payload["drawings"]
         assert client.get("/api/v1/drawings/BTCUSDT").status_code == 401
 
+        preferences = {
+            "focusLayout": 4,
+            "focusVenue": "BY-F",
+            "syncCrosshair": False,
+            "syncRange": True,
+            "paneOverlays": {"0": {"walls": False}, "1": {"volume": True}},
+            "grid": 3,
+            "ignoredServerField": "must not persist",
+        }
+        r = client.put("/api/v1/preferences", json={"preferences": preferences}, headers=headers)
+        assert r.status_code == 200
+        saved = r.json()["preferences"]
+        assert saved["focusLayout"] == 4
+        assert saved["focusVenue"] == "BY-F"
+        assert saved["syncCrosshair"] is False
+        assert saved["syncRange"] is True
+        assert saved["paneOverlays"]["0"]["walls"] is False
+        assert "ignoredServerField" not in saved
+        assert client.get("/api/v1/preferences", headers=headers).json()["preferences"] == saved
+
     def test_duplicate_register_conflict(self, client):
         email = f"dup{time.time_ns()}@scalpair.dev"
         r1 = client.post("/api/v1/auth/register", json={"email": email, "password": "s3cretpass!"})

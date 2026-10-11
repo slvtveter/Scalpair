@@ -25,7 +25,7 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `POST /auth/login` | → `{access_token, subscription_tier}` (JWT HS256) |
 | `GET /auth/me` | Bearer required |
 | `GET /preferences` | authenticated workspace settings and layout |
-| `PUT /preferences` | authenticated workspace settings (groups, hidden, order, filters, layout, sound, `dndUntil` Unix seconds) |
+| `PUT /preferences` | authenticated workspace settings (board groups/order/filters, sound/DND, plus Focus `focusLayout`, `focusVenue`, `syncCrosshair`, `syncRange`, and per-pane `paneOverlays`) |
 | `GET /watchlists` | authenticated favorite symbols |
 | `PUT /watchlists` | replace authenticated favorite symbols |
 | `GET/PUT /drawings/{SYMBOL}?instrument_id=` | authenticated Focus drawings; optional instrument binding isolates the same ticker across exchanges |

@@ -1140,6 +1140,11 @@ function preferencePayload() {
     showWalls: S.showWalls,
     sound: S.soundOn,
     dndUntil: S.dndUntil,
+    syncCrosshair: S.syncCrosshair,
+    syncRange: S.syncRange,
+    paneOverlays: S.paneOverlays,
+    focusLayout: S.focusLayout,
+    focusVenue: S.focusVenue,
   };
 }
 
@@ -1165,7 +1170,12 @@ async function syncPreferences() {
     if (typeof p.showWalls === "boolean") S.showWalls = p.showWalls;
     if (typeof p.sound === "boolean") S.soundOn = p.sound;
     if (Number.isFinite(Number(p.dndUntil))) S.dndUntil = Number(p.dndUntil);
-    for (const [key, value] of Object.entries({groups:S.groups, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls, sound:S.soundOn, dndUntil:S.dndUntil})) LS.set(key, value);
+    if (typeof p.syncCrosshair === "boolean") S.syncCrosshair = p.syncCrosshair;
+    if (typeof p.syncRange === "boolean") S.syncRange = p.syncRange;
+    if (p.paneOverlays && typeof p.paneOverlays === "object" && !Array.isArray(p.paneOverlays)) S.paneOverlays = p.paneOverlays;
+    if ([1, 2, 4].includes(Number(p.focusLayout))) S.focusLayout = Number(p.focusLayout);
+    if (typeof p.focusVenue === "string" && p.focusVenue.length <= 16) S.focusVenue = p.focusVenue;
+    for (const [key, value] of Object.entries({groups:S.groups, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls, sound:S.soundOn, dndUntil:S.dndUntil, syncCrosshair:S.syncCrosshair, syncRange:S.syncRange, paneOverlays:S.paneOverlays, focusLayout:S.focusLayout, focusVenue:S.focusVenue})) LS.set(key, value);
     syncDndSelect();
     renderGroups(); renderMarketFilters(); updateSortControl(); renderBoard(); renderCoinList();
   } catch {}
@@ -1367,6 +1377,7 @@ function setupFocusSource(row) {
 focusSourceSelect.addEventListener("change", () => {
   S.focusVenue = focusSourceSelect.value;
   LS.set("focusVenue", S.focusVenue);
+  persistPreferences();
   for (const pane of focusPanes) { pane.candles = []; pane.series = []; pane.walls = []; pane.levels = []; }
   refreshFocus(true);
 });
@@ -1427,10 +1438,11 @@ function syncFocusCursor(origin,timestamp) {
 }
 $("focus-crosshair-sync").addEventListener("change",e=>{
   S.syncCrosshair=e.target.checked;LS.set("syncCrosshair",S.syncCrosshair);
+  persistPreferences();
   for (const pane of focusPanes) pane.syncedTime=null;
   drawChart();
 });
-$("focus-range-sync").addEventListener("change",e=>{ S.syncRange=e.target.checked; LS.set("syncRange",S.syncRange); });
+$("focus-range-sync").addEventListener("change",e=>{ S.syncRange=e.target.checked; LS.set("syncRange",S.syncRange); persistPreferences(); });
 function syncFocusRange(origin) {
   if (!S.syncRange || !origin.series.length) return;
   const anchor=origin.series[origin.offset]?.t;
@@ -1446,11 +1458,11 @@ function refreshFocus(reset=false) {
   return Promise.all(focusPanes.slice(0,S.focusLayout).map(pane=>refreshChart(reset,pane)));
 }
 $("focus-layout").addEventListener("change",e=>{
-  S.focusLayout=Number(e.target.value);LS.set("focusLayout",S.focusLayout);updateFocusLayout();refreshFocus(true);drawChart();
+  S.focusLayout=Number(e.target.value);LS.set("focusLayout",S.focusLayout);persistPreferences();updateFocusLayout();refreshFocus(true);drawChart();
 });
 document.querySelectorAll(".pane-overlays input").forEach(input=>input.addEventListener("change",e=>{
   const i=String(e.target.dataset.pane), kind=e.target.className.replace("pane-overlay-","");
-  S.paneOverlays[i]={...(S.paneOverlays[i]||{}),[kind]:e.target.checked}; LS.set("paneOverlays",S.paneOverlays); drawChart();
+  S.paneOverlays[i]={...(S.paneOverlays[i]||{}),[kind]:e.target.checked}; LS.set("paneOverlays",S.paneOverlays); persistPreferences(); drawChart();
 }));
 function paneOverlay(pane,kind){ return S.paneOverlays[String(pane.index)]?.[kind] !== false; }
 for (const pane of focusPanes.slice(1)) {

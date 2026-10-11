@@ -410,3 +410,10 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Pushed commits `cb002df`, `c49f78e`, `a1744f2` and `9f6a59b` to `origin/main`.
 - After the final static entry fallback, live checks returned HTTP 200 for both `https://scalpair-frontend.onrender.com/` and `/en`; backend health returned HTTP 200.
 - The live backend currently reports Bybit active and zero ingested messages at the instant of the check, so market freshness still requires a later runtime check after cold-start warmup.
+## Focus preference persistence
+
+- Authenticated preferences now round-trip Focus layout (1/2/4 panes),
+  selected venue, cursor/range synchronization, and per-pane overlay toggles.
+- The browser writes these values when changed and restores them after login;
+  the server allowlist drops unknown preference keys.
+- API auth round-trip coverage and all frontend tests pass locally.
