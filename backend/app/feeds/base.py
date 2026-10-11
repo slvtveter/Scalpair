@@ -100,6 +100,23 @@ class FeedConnector:
         """Subscription payloads to send right after the socket opens."""
         raise NotImplementedError
 
+    async def probe_websocket(self, symbols: list[str]) -> bool:
+        """Verify handshake and one upstream frame before selecting a feed."""
+        kwargs: dict[str, Any] = {
+            "ping_interval": self.ping_interval,
+            "ping_timeout": 5,
+            "close_timeout": 3,
+            "compression": None,
+            "open_timeout": 5,
+        }
+        if self.ws_origin:
+            kwargs["origin"] = self.ws_origin
+        async with websockets.connect(self.ws_url, **kwargs) as ws:
+            for payload in await self.subscribe_messages(symbols[:3]):
+                await ws.send(json.dumps(payload))
+            await asyncio.wait_for(ws.recv(), timeout=5)
+        return True
+
     async def handle_message(self, msg: Any) -> None:
         """Parse one raw message and dispatch normalized callbacks."""
         raise NotImplementedError

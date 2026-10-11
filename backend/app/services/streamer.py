@@ -159,7 +159,9 @@ class MarketStreamer:
             try:
                 tickers = await asyncio.wait_for(feed.fetch_universe(3), timeout=FEED_PROBE_TIMEOUT_S)
                 if tickers:
-                    log.info("selected feed: %s (probe ok, %d tickers)", feed.name, len(tickers))
+                    if self.settings.data_feed == "auto":
+                        await asyncio.wait_for(feed.probe_websocket([t["symbol"] for t in tickers]), timeout=8)
+                    log.info("selected feed: %s (REST/WS probe ok, %d tickers)", feed.name, len(tickers))
                     return feed
             except Exception as exc:  # noqa: BLE001
                 log.warning("feed %s probe failed: %s", feed.name, exc)
