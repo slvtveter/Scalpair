@@ -248,6 +248,7 @@ async def candles(
     symbol: str,
     limit: int = Query(300, ge=10, le=500),
     timeframe: Literal["1m", "3m", "5m", "15m", "30m", "1h", "4h", "1D"] = "1m",
+    instrument_id: str | None = Query(default=None, max_length=128),
 ) -> JSONResponse:
     """1-minute OHLCV candles + current walls for the chart view."""
     state = request.app.state.market_state
@@ -256,6 +257,10 @@ async def candles(
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"unknown symbol {symbol}")
     streamer = request.app.state.streamer
     feed, generation = streamer.feed, streamer._generation
+    venue = venue_for_feed(feed.name if feed else "")
+    expected_instrument = f"{venue}:FUTURES:{st.symbol}"
+    if instrument_id and instrument_id != expected_instrument:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Instrument source changed; retry with the active instrument")
     source = "stream"
     history = aggregate_history(list(st.candles), TIMEFRAMES[timeframe])[-limit:]
     limited = timeframe != "1m"
@@ -268,7 +273,6 @@ async def candles(
             raise HTTPException(409, "Market source changed; retry history request")
         source = "exchange_rest"
         limited = False
-    venue = venue_for_feed(feed.name if feed else "")
     return JSONResponse(
         {
             "symbol": st.symbol,
@@ -276,6 +280,7 @@ async def candles(
             "timeframe": timeframe,
             "feed": state.feed_mode,
             "venue": venue,
+            "market": "FUTURES",
             "sourceGeneration": generation,
             "historySource": source,
             "limitedHistory": limited,

@@ -245,6 +245,14 @@ syntax/static-server checks did not establish functional or visual acceptance.
   active Bybit feed and the published `/en` document contains the DND control
   (`dnd-select`).
 
+## Focus instrument identity guard
+
+- Focus now sends the snapshot `instrument_id` with every candle request and
+  shows venue/market in the Focus title. The backend rejects a stale source
+  identity with HTTP 409 instead of silently mixing history across venues.
+- Added a regression test for the mismatch path; Python/JavaScript syntax,
+  frontend tests and diff checks pass. Production deployment is pending.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 

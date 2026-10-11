@@ -1445,7 +1445,7 @@ async function openChart(symbol) {
   updateChartGroupControl();
   const r = S.bySym.get(symbol);
   const pick = S.picks.find((p) => p.symbol === symbol);
-  $("chart-title").textContent = `${symbol} · ${timeframeName(chart.tfMin)}`;
+  $("chart-title").textContent = `${symbol} · ${r?.venue || "—"} · ${r?.market || "FUTURES"} · ${timeframeName(chart.tfMin)}`;
   $("chart-tag").textContent = pick?.tag || r?.tag || "—";
   $("chart-tag").className = `tag-cell ${tagClass(pick?.tag || r?.tag)}`;
   $("chart-thesis").textContent = pick?.thesis || r?.thesis || "—";
@@ -1460,15 +1460,18 @@ async function openChart(symbol) {
 
 async function refreshChart(resetView = false, chart = focusPanes[0]) {
   const symbol = chartSym, epoch = S.dataEpoch, tf = chart.tfMin;
+  const instrumentId = S.bySym.get(symbol)?.instrument_id || "";
   const requestId = chart.requestId = (chart.requestId || 0) + 1;
   if (!chartSym || modal.classList.contains("hidden")) return;
   if (resetView) setHistoryStatus(S.lang === "ru" ? "Загрузка истории…" : "Loading history…", chart);
   try {
-    const res = await fetch(`${API_BASE}/api/v1/markets/${encodeURIComponent(chartSym)}/candles?limit=300&timeframe=${timeframeName(tf)}`, { cache: "no-store", signal: AbortSignal.timeout(20000) });
+    const sourceParam = instrumentId ? `&instrument_id=${encodeURIComponent(instrumentId)}` : "";
+    const res = await fetch(`${API_BASE}/api/v1/markets/${encodeURIComponent(chartSym)}/candles?limit=300&timeframe=${timeframeName(tf)}${sourceParam}`, { cache: "no-store", signal: AbortSignal.timeout(20000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const body = await res.json();
     if (requestId !== chart.requestId || symbol !== chartSym || epoch !== S.dataEpoch || tf !== chart.tfMin || chart.index >= S.focusLayout) return;
     chart.sourceTf = tf;
+    $("chart-title").textContent = `${symbol} · ${body.venue || "—"} · ${body.market || "FUTURES"} · ${timeframeName(tf)}`;
     setHistoryStatus(`${body.venue || "—"} · ${body.timeframe || timeframeName(tf)} · ${(body.candles || []).length} bars${body.limitedHistory ? " · " + (S.lang === "ru" ? "ограниченная история потока" : "limited stream history") : ""} · ${S.lang === "ru" ? "Уровни: 1м" : "Levels: 1m"}`, chart);
     chart.candles = body.candles || [];
     rebuildSeries(chart);

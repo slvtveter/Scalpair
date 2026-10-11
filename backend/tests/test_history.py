@@ -58,6 +58,19 @@ async def test_daily_route_and_generation_race():
     assert exc.value.status_code==409
     await stream.history.close()
 
+
+async def test_candle_route_rejects_stale_instrument_source():
+    from fastapi import HTTPException
+
+    state = MarketState(); state.feed_mode = "bybit"; st = state.get("BTCUSDT")
+    st.on_candle(60000, 100, 110, 90, 105, 20)
+    stream = SimpleNamespace(feed=SimpleNamespace(name="bybit"), _generation=2, history=HistoryCache())
+    req = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(market_state=state, streamer=stream)))
+    with pytest.raises(HTTPException) as exc:
+        await candles(req, "BTCUSDT", 300, "1m", "BI-F:FUTURES:BTCUSDT")
+    assert exc.value.status_code == 409
+    await stream.history.close()
+
 @pytest.mark.parametrize('module_name,cls,param,expected', [('binance','BinanceFuturesFeed','interval','1d'),('bybit','BybitLinearFeed','interval','D'),('okx','OkxSwapFeed','bar','1Dutc')])
 async def test_daily_exchange_parameters(monkeypatch,module_name,cls,param,expected):
     import importlib
