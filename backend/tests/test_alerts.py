@@ -220,3 +220,48 @@ def test_instrument_binding_resolves_isolated_source_state(state):
     rule = mk_rule(instrument_id="BI-S:SPOT:BTCUSDT")
     assert engine._state_for_rule(rule) is secondary
     assert engine._rule_matches_instrument(rule, secondary)
+
+
+@pytest.mark.asyncio
+async def test_real_evaluation_isolates_markets_and_queues_once(monkeypatch):
+    from types import SimpleNamespace
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+    from app.db import Base, User, AlertEvent, NotificationDelivery, TelegramLink
+
+    database = create_async_engine('sqlite+aiosqlite:///:memory:')
+    factory = async_sessionmaker(database, expire_on_commit=False)
+    monkeypatch.setattr('app.alerts.get_session_factory', lambda _: factory)
+    try:
+        async with database.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        primary, spot = MarketState(), MarketState()
+        primary.feed_mode, spot.feed_mode = 'bybit', 'binance_spot'
+        primary.get('BTCUSDT').price = 66_000
+        spot.get('BTCUSDT').price = 64_000
+        scorer = SimpleNamespace(picks={'BTCUSDT': SimpleNamespace(scalp_score=99)})
+        engine = AlertEngine(primary, Settings(), scorer,
+                             source_provider=lambda: {'binance_spot': spot})
+        async with factory() as sess:
+            sess.add(User(id=1, email='isolation@example.test', password_hash='unused'))
+            await sess.flush()
+            sess.add(TelegramLink(user_id=1, chat_id='test-chat'))
+            sess.add(mk_rule(instrument_id='BI-S:SPOT:BTCUSDT'))
+            sess.add(mk_rule(instrument_id='BI-S:SPOT:BTCUSDT',
+                             rule_type='score_above', threshold=80))
+            await sess.commit()
+        await engine._evaluate()
+        async with factory() as sess:
+            assert not (await sess.scalars(select(AlertEvent))).all()
+        spot.get('BTCUSDT').price = 65_100
+        await engine._evaluate()
+        await engine._evaluate()
+        async with factory() as sess:
+            events = (await sess.scalars(select(AlertEvent))).all()
+            assert len(events) == 1
+            assert events[0].instrument_id == 'BI-S:SPOT:BTCUSDT'
+            assert events[0].rule_type == 'price_cross_above'
+            deliveries = (await sess.scalars(select(NotificationDelivery))).all()
+            assert sorted(d.channel for d in deliveries) == ['in_app', 'telegram']
+            assert all(d.event_db_id == events[0].id for d in deliveries)
+    finally:
+        await database.dispose()

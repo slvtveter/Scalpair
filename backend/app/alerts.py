@@ -183,6 +183,10 @@ class AlertEngine:
             surge = sym.metrics.surge_closed if sym else None
             return (surge is not None and surge >= rule.threshold), surge
         if rule.rule_type == "score_above":
+            # The scorer currently covers the primary source only. Never use
+            # its ticker-keyed score for an identically named secondary market.
+            if state is not self.state or self.scorer is None:
+                return False, None
             pick = self.scorer.picks.get(rule.symbol.upper())
             score = pick.scalp_score if pick else None
             return (score is not None and score >= rule.threshold), score
