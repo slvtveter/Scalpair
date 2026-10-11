@@ -453,3 +453,5 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - The multi-source health counters now aggregate all source symbol lists (`8184d19`); the regression suite covers this contract.
 - API smoke checks returned HTTP 200 for overview, source-labelled instrument discovery, candles, and density coverage endpoints with the live Bybit feed.
 - Commit `924650f` keeps one price sample per second under high trade throughput and normalizes speed by the selected window; targeted and full backend tests pass.
+- Commit `af05024` prevents secondary-market score alerts from borrowing the primary source's ticker-keyed score; the integration test confirms one source-bound event and exactly one in-app plus one Telegram delivery row.
+- Final audit on 2026-10-11: 137 backend tests and 37 frontend tests pass; Render health, overview and frontend `/en` each returned HTTP 200 with a live Bybit stream.
