@@ -475,3 +475,17 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - This closes the browser-scale lifecycle gap for the synthetic fixture. It does
   not prove equivalent performance with live exchange payloads or Render's
   free-tier resource limits.
+
+## Source-specific favorites, groups and hidden instruments
+
+- Favorites, group membership, color markers and hidden state now use instrument
+  identity in board, ticker list, search and Focus. Spot/Futures sharing a ticker
+  can be managed independently.
+- Watchlist API stores instrument identity separately from the legacy symbol,
+  validates venue/market combinations and preserves symbol-only records.
+- Legacy bare ticker membership retains its all-source interpretation until
+  edited; editing expands it to currently known catalog/snapshot instruments.
+- 138 backend and 38 frontend tests pass, including API identity round trips,
+  invalid-input preservation and independent Spot/Futures workspace state.
+- An existing SQLite watchlist was upgraded twice without losing its stored
+  symbol. Production rollout of this change remains to be verified.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import secrets
 import time
 from typing import Annotated, Any, Literal
@@ -75,7 +76,7 @@ async def get_watchlist(user: AUTHORIZED) -> dict[str, Any]:
         rows = (
             await sess.execute(select(WatchlistItem).where(WatchlistItem.user_id == user.id).order_by(WatchlistItem.id))
         ).scalars().all()
-    return {"symbols": [row.symbol for row in rows]}
+    return {"symbols": [row.instrument_id or row.symbol for row in rows]}
 
 
 @router.put("/watchlists")
@@ -84,7 +85,7 @@ async def put_watchlist(body: WatchlistIn, user: AUTHORIZED) -> dict[str, Any]:
     symbols: list[str] = []
     for raw in body.symbols:
         symbol = raw.strip().upper()
-        if not symbol or len(symbol) > 32 or not symbol.endswith("USDT"):
+        if not re.fullmatch(r"(?:(?:BI-F:FUTURES|BY-F:FUTURES|OK-F:FUTURES|BI-S:SPOT|BY-S:SPOT|DEMO:FUTURES):)?[A-Z0-9]{1,28}USDT", symbol):
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "watchlist symbols must be USDT instruments")
         if symbol not in symbols:
             symbols.append(symbol)
@@ -95,7 +96,7 @@ async def put_watchlist(body: WatchlistIn, user: AUTHORIZED) -> dict[str, Any]:
         ).scalars().all()
         for row in rows:
             await sess.delete(row)
-        sess.add_all([WatchlistItem(user_id=user.id, symbol=symbol) for symbol in symbols])
+        sess.add_all([WatchlistItem(user_id=user.id, symbol=symbol.split(":")[-1], instrument_id=symbol if ":" in symbol else None) for symbol in symbols])
         await sess.commit()
     return {"symbols": symbols}
 

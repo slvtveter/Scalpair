@@ -39,6 +39,9 @@ class WatchlistItem(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     symbol: Mapped[str] = mapped_column(String(32), index=True)
+    # Stable exchange/market identity. Nullable keeps existing symbol-only
+    # rows readable while users migrate to source-specific favorites.
+    instrument_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
 
 
 class UserPreference(Base):
@@ -184,6 +187,10 @@ async def init_db(database_url: str) -> None:
             if "instrument_id" not in drawing_columns:
                 await conn.execute(text("ALTER TABLE chart_drawings ADD COLUMN instrument_id VARCHAR(128)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_chart_drawings_instrument_id ON chart_drawings (instrument_id)"))
+            watchlist_columns = {row[1] for row in (await conn.execute(text("PRAGMA table_info(watchlist)"))).all()}
+            if "instrument_id" not in watchlist_columns:
+                await conn.execute(text("ALTER TABLE watchlist ADD COLUMN instrument_id VARCHAR(128)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_watchlist_instrument_id ON watchlist (instrument_id)"))
             await conn.execute(text("PRAGMA journal_mode=WAL"))
     log.info("database ready (%s)", database_url.split("://")[0])
 

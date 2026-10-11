@@ -335,3 +335,23 @@ test('Focus exposes keyboard drawing shortcuts and undo binding', () => {
   assert.match(source,/shortcuts=\{h:"horizontal",t:"trend",r:"rectangle",f:"fib",m:"ruler",p:"pencil",v:"none"\}/);
   assert.match(source,/draw-undo.*click/);
 });
+
+test('workspace favorites, groups and hidden instruments distinguish Spot from Futures', () => {
+  const a = app();
+  a.run(`S.symbols = [
+    {symbol:'BTCUSDT',instrument_id:'BI-S:SPOT:BTCUSDT'},
+    {symbol:'BTCUSDT',instrument_id:'BY-F:FUTURES:BTCUSDT'}
+  ]; toggleGroupSymbol('watch', 'BI-S:SPOT:BTCUSDT'); S.activeGroup='watch';`);
+  assert.equal(a.run(`inActiveGroup('BI-S:SPOT:BTCUSDT')`), true);
+  assert.equal(a.run(`inActiveGroup('BY-F:FUTURES:BTCUSDT')`), false);
+  a.run(`const id=saveGroup(null,'Spot','green'); S.activeGroup=id;
+    toggleGroupSymbol(id,'BI-S:SPOT:BTCUSDT');
+    S.hidden=toggleWorkspace(S.hidden,'BY-F:FUTURES:BTCUSDT');`);
+  assert.equal(a.run(`inActiveGroup('BI-S:SPOT:BTCUSDT')`), true);
+  assert.equal(a.run(`inActiveGroup('BY-F:FUTURES:BTCUSDT')`), false);
+  assert.equal(a.run(`workspaceHas(S.hidden,'BI-S:SPOT:BTCUSDT')`), false);
+  assert.equal(a.run(`workspaceHas(S.hidden,'BY-F:FUTURES:BTCUSDT')`), true);
+  a.run(`S.watch=new Set(['BTCUSDT']); toggleGroupSymbol('watch','BI-S:SPOT:BTCUSDT');`);
+  assert.equal(a.run(`workspaceHas(S.watch,'BI-S:SPOT:BTCUSDT')`), false);
+  assert.equal(a.run(`workspaceHas(S.watch,'BY-F:FUTURES:BTCUSDT')`), true);
+});

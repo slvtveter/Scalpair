@@ -145,25 +145,44 @@ function deleteGroup(id) {
   if (S.activeGroup===id) {S.activeGroup="all";LS.set("activeGroup","all");}
   LS.set("groups",S.groups); persistPreferences();
 }
+// Legacy bare tickers retain their original all-source membership. On edit,
+// expand them to known instruments so changing one market leaves others alone.
+function workspaceHas(items, identity) {
+  const keys = items instanceof Set ? items : new Set(items || []);
+  return keys.has(identity) || keys.has(identity.split(":").pop());
+}
+function toggleWorkspace(items, identity) {
+  const keys = new Set(items);
+  const symbol = identity.split(":").pop();
+  if (identity.includes(":") && keys.has(symbol)) {
+    keys.delete(symbol);
+    keys.add(identity);
+    for (const row of [...S.catalog, ...S.symbols]) {
+      if (row.symbol === symbol && row.instrument_id) keys.add(row.instrument_id);
+    }
+  }
+  if (keys.has(identity)) keys.delete(identity); else keys.add(identity);
+  return keys;
+}
 function toggleGroupSymbol(id,symbol) {
   if (id==="watch") {
-    if (S.watch.has(symbol)) S.watch.delete(symbol); else S.watch.add(symbol);
+    S.watch = toggleWorkspace(S.watch, symbol);
     LS.set("watch",[...S.watch]);
     persistWatchlist();
     return;
   }
   const group=S.groups.find(g=>g.id===id);
   if (!group) return;
-  group.symbols=group.symbols.includes(symbol)?group.symbols.filter(s=>s!==symbol):[...group.symbols,symbol];
+  group.symbols=[...toggleWorkspace(group.symbols, symbol)];
   LS.set("groups",S.groups); persistPreferences();
 }
 function inActiveGroup(symbol) {
   if (S.activeGroup==="all") return true;
-  if (S.activeGroup==="watch") return S.watch.has(symbol);
-  return Boolean(S.groups.find(g=>g.id===S.activeGroup)?.symbols.includes(symbol));
+  if (S.activeGroup==="watch") return workspaceHas(S.watch, symbol);
+  return Boolean(workspaceHas(S.groups.find(g=>g.id===S.activeGroup)?.symbols, symbol));
 }
 function groupColor(symbol) {
-  const group=S.groups.find(g=>g.id===S.activeGroup && g.symbols.includes(symbol)) || S.groups.find(g=>g.symbols.includes(symbol));
+  const group=S.groups.find(g=>g.id===S.activeGroup && workspaceHas(g.symbols, symbol)) || S.groups.find(g=>workspaceHas(g.symbols, symbol));
   return GROUP_COLORS[group?.color] || "transparent";
 }
 function renderGroups() {
@@ -496,7 +515,7 @@ function sortedRows() {
     const added = S.symbols.filter((r) => !known.has(rowIdentity(r))).sort(compareRows);
     S.order = [...S.order.filter((key) => available.has(key)), ...added.map(rowIdentity)];
   }
-  return S.order.map((key) => available.get(key)).filter((r) => r && !S.hidden.has(r.symbol) && inActiveGroup(r.symbol) &&
+  return S.order.map((key) => available.get(key)).filter((r) => r && !workspaceHas(S.hidden, rowIdentity(r)) && inActiveGroup(rowIdentity(r)) &&
     (!S.search || r.symbol.includes(S.search.toUpperCase())) &&
     (S.venue === "ALL" || (r.venue || r.exchange || "—") === S.venue) &&
     (r.score ?? 0) >= S.minScore && matchesMarketFilters(r, S.filters));
@@ -758,7 +777,7 @@ function renderBoard() {
     grid.innerHTML = slice.map((r) => `
       <div class="board-tile" data-sym="${esc(r.symbol)}" data-instrument="${esc(r.instrument_id || "")}" tabindex="0" role="button" aria-label="Focus: ${esc(r.symbol)}">
         <div class="tile-head">
-          <span class="tile-id"><span class="star ${S.watch.has(r.symbol) ? "on" : ""}" data-star="${esc(r.symbol)}">${S.watch.has(r.symbol) ? "★" : "☆"}</span> <b>${esc(r.symbol.replace(/USDT$/, ""))}</b><em class="tile-venue">${esc(r.venue || r.exchange || "—")}</em></span>
+          <span class="tile-id"><span class="star ${workspaceHas(S.watch, rowIdentity(r)) ? "on" : ""}" data-star="${esc(rowIdentity(r))}">${workspaceHas(S.watch, rowIdentity(r)) ? "★" : "☆"}</span> <b>${esc(r.symbol.replace(/USDT$/, ""))}</b><em class="tile-venue">${esc(r.venue || r.exchange || "—")}</em></span>
           <span class="tc ${cls(r.change5m)}">${fmtPct(r.change5m, 1)}</span>
           <span class="ts ${cls(r.surge - 1)}">${r.surge != null ? `${r.surge.toFixed(1)}x` : ""}</span>
           <span class="score-num ${scoreClass(r.score)}">${r.score != null ? r.score.toFixed(0) : "—"}</span>
@@ -771,7 +790,7 @@ function renderBoard() {
     const sym = tile.dataset.sym;
     const r = rowForIdentity(tile.dataset.instrument || sym);
     tile.draggable = !S.autoSort;
-    tile.style.borderLeftColor = groupColor(sym);
+    tile.style.borderLeftColor = groupColor(tile.dataset.instrument || sym);
     if (r) updateTileMetrics(tile, r);
     const chip = tile.querySelector(".tile-stale");
     if (r && isStale(r)) {
@@ -806,7 +825,7 @@ function updateTileMetrics(tile, r) {
   set(".tile-natr", `NATR ${r.natr != null ? `${r.natr.toFixed(1)}%` : "—"}`);
   set(".tag-cell", r.tag || "", `tag-cell ${tagClass(r.tag)}`);
   set(".tile-venue", r.venue || r.exchange || "—");
-  set(".star", S.watch.has(r.symbol) ? "★" : "☆", `star ${S.watch.has(r.symbol) ? "on" : ""}`);
+  set(".star", workspaceHas(S.watch, rowIdentity(r)) ? "★" : "☆", `star ${workspaceHas(S.watch, rowIdentity(r)) ? "on" : ""}`);
 }
 
 for (const event of ["pointerover", "pointermove", "pointerdown", "focusin", "wheel"]) {
@@ -887,15 +906,15 @@ function renderCoinList() {
     const venue = r.venue || r.exchange || "—";
     const imb = r.imbalance ?? 0;
     const imbW = Math.min(Math.abs(imb) * 50, 50);
-    const star = S.watch.has(r.symbol) ? "★" : "☆";
+    const star = workspaceHas(S.watch, rowIdentity(r)) ? "★" : "☆";
     const levelTxt = r.levelDist != null
       ? `${r.levelDist.toFixed(1)}%${r.levelKind === "resistance" ? "↑" : r.levelKind === "support" ? "↓" : "◎"}`
       : "";
     const stale = isStale(r) ? `<span class="tile-stale">${t("stale")}</span>` : "";
     return `
-    <div class="coin-row" style="border-left:2px solid ${groupColor(r.symbol)}" data-sym="${esc(r.symbol)}" data-instrument="${esc(r.instrument_id || "")}" tabindex="0" role="button" aria-label="Focus: ${esc(r.symbol)}">
+    <div class="coin-row" style="border-left:2px solid ${groupColor(rowIdentity(r))}" data-sym="${esc(r.symbol)}" data-instrument="${esc(r.instrument_id || "")}" tabindex="0" role="button" aria-label="Focus: ${esc(r.symbol)}">
       <div class="cr-top">
-        <span class="star ${S.watch.has(r.symbol) ? "on" : ""}" data-star="${esc(r.symbol)}">${star}</span>
+        <span class="star ${workspaceHas(S.watch, rowIdentity(r)) ? "on" : ""}" data-star="${esc(rowIdentity(r))}">${star}</span>
         <b>${esc(ticker)}</b><em class="row-venue">${esc(venue)}</em>${stale}
         <span class="cr-tag tag-cell ${tagClass(r.tag)}">${esc(r.tag ?? "")}</span>
         <span class="cr-score mono ${scoreClass(r.score)}">${r.score != null ? r.score.toFixed(0) : ""}</span>
@@ -1309,7 +1328,7 @@ function renderSearch() {
   if (!S.searchQuery) { closeSearch(); return; }
   const rows = searchMarkets(S.searchQuery);
   S.searchIndex = Math.max(0, Math.min(S.searchIndex, rows.length - 1));
-  $("search-results").innerHTML = rows.length ? rows.map((row,i) => `<button type="button" role="option" tabindex="-1" id="search-option-${i}" aria-selected="${i === S.searchIndex}" data-search-symbol="${esc(row.symbol)}" data-search-instrument="${esc(row.instrument_id || "")}"><b>${esc(row.symbol)}</b><span>${esc(row.venue || "—")}${row.market ? ` · ${esc(row.market)}` : ""}</span><span>${fmtPrice(row.price)}</span>${S.hidden.has(row.symbol) ? `<small>${S.lang === "ru" ? "Скрыт с доски" : "Hidden from board"}</small>` : ''}</button>`).join("") : `<p>${S.lang === "ru" ? "Нет совпадений в доступном каталоге" : "No matches in the available catalog"}</p>`;
+  $("search-results").innerHTML = rows.length ? rows.map((row,i) => `<button type="button" role="option" tabindex="-1" id="search-option-${i}" aria-selected="${i === S.searchIndex}" data-search-symbol="${esc(row.symbol)}" data-search-instrument="${esc(row.instrument_id || "")}"><b>${esc(row.symbol)}</b><span>${esc(row.venue || "—")}${row.market ? ` · ${esc(row.market)}` : ""}</span><span>${fmtPrice(row.price)}</span>${workspaceHas(S.hidden, rowIdentity(row)) ? `<small>${S.lang === "ru" ? "Скрыт с доски" : "Hidden from board"}</small>` : ''}</button>`).join("") : `<p>${S.lang === "ru" ? "Нет совпадений в доступном каталоге" : "No matches in the available catalog"}</p>`;
   $("search-results").classList.remove("hidden");
   $("search").setAttribute("aria-expanded", "true");
   if (rows.length) $("search").setAttribute("aria-activedescendant", `search-option-${S.searchIndex}`);
@@ -1563,22 +1582,22 @@ function closeChart() {
 }
 function updateChartGroupControl() {
   const id=$("chart-group").value;
-  const included=id==="watch"?S.watch.has(chartSym):S.groups.find(g=>g.id===id)?.symbols.includes(chartSym);
+  const included=id==="watch"?workspaceHas(S.watch, focusInstrumentId()):workspaceHas(S.groups.find(g=>g.id===id)?.symbols, focusInstrumentId());
   $("chart-group-toggle").textContent=S.lang==="ru"?(included?"Убрать из группы":"В группу"):(included?"Remove from group":"Add to group");
 }
 $("chart-group").addEventListener("change",updateChartGroupControl);
 $("chart-group-toggle").addEventListener("click",()=>{
   if (!chartSym) return;
-  toggleGroupSymbol($("chart-group").value,chartSym);updateChartGroupControl();renderBoard();renderCoinList();
+  toggleGroupSymbol($("chart-group").value,focusInstrumentId());updateChartGroupControl();renderBoard();renderCoinList();
 });
 function updateHiddenControl() {
-  $("chart-hide").textContent = S.hidden.has(chartSym)
+  $("chart-hide").textContent = workspaceHas(S.hidden, focusInstrumentId())
     ? (S.lang === "ru" ? "Вернуть на доску" : "Show on board")
     : (S.lang === "ru" ? "Скрыть с доски" : "Hide from board");
 }
 $("chart-hide").addEventListener("click", () => {
   if (!chartSym) return;
-  if (S.hidden.has(chartSym)) S.hidden.delete(chartSym); else S.hidden.add(chartSym);
+  S.hidden = toggleWorkspace(S.hidden, focusInstrumentId());
   LS.set("hidden", [...S.hidden]); persistPreferences(); updateHiddenControl(); renderBoard(); renderCoinList();
 });
 $("chart-fullscreen").addEventListener("click", async () => {

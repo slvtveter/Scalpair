@@ -157,6 +157,16 @@ class TestAuth:
         assert client.get("/api/v1/drawings/BTCUSDT", headers=headers).json()["drawings"] == payload["drawings"]
         assert client.get("/api/v1/drawings/BTCUSDT").status_code == 401
 
+        favorites = ["BI-S:SPOT:BTCUSDT", "BY-F:FUTURES:BTCUSDT", "ETHUSDT"]
+        response = client.put("/api/v1/watchlists", json={"symbols": favorites + favorites}, headers=headers)
+        assert response.status_code == 200
+        assert response.json()["symbols"] == favorites
+        assert client.get("/api/v1/watchlists", headers=headers).json()["symbols"] == favorites
+        assert client.get("/api/v1/watchlists").status_code == 401
+        invalid = client.put("/api/v1/watchlists", json={"symbols": ["BI-S:FUTURES:BTCUSDT"]}, headers=headers)
+        assert invalid.status_code == 422
+        assert client.get("/api/v1/watchlists", headers=headers).json()["symbols"] == favorites
+
         preferences = {
             "focusLayout": 4,
             "focusVenue": "BY-F",
