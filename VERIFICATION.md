@@ -346,6 +346,15 @@ syntax/static-server checks did not establish functional or visual acceptance.
   category legend, while the live density API reports 25 received levels per
   side and `complete_percent_range=false`.
 
+## Alternate-source history regression fix
+
+- Direct history calls now accept plain `instrument_id` values as well as
+  FastAPI query parsing, and alternate exchange tuple candles are normalized
+  through the same canonical path as cached history.
+- The focused backend suite (`test_api`, `test_alerts`, `test_analytics`,
+  `test_history`) passes 56 tests; frontend suite passes 36 tests. The fix
+  prevents source selection from failing only outside the HTTP adapter.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 

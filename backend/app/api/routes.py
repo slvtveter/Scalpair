@@ -282,7 +282,7 @@ async def candles(
     symbol: str,
     limit: int = Query(300, ge=10, le=500),
     timeframe: Literal["1m", "3m", "5m", "15m", "30m", "1h", "4h", "1D"] = "1m",
-    instrument_id: str | None = Query(default=None, max_length=128),
+    instrument_id: str | None = None,
 ) -> JSONResponse:
     """1-minute OHLCV candles + current walls for the chart view."""
     state = request.app.state.market_state
@@ -311,7 +311,8 @@ async def candles(
     if (timeframe != "1m" or alternate_source) and selected_feed is not None and hasattr(selected_feed, "fetch_klines"):
         try:
             if alternate_source:
-                history = normalize_rows(await selected_feed.fetch_klines(st.symbol, limit=limit, timeframe=timeframe))
+                rows = await selected_feed.fetch_klines(st.symbol, limit=limit, timeframe=timeframe)
+                history = normalize_rows([dict(t=t, o=o, h=h, l=l, c=c, v=v) for t, o, h, l, c, v in rows])
             else:
                 history = await streamer.history.get(generation, selected_feed, st.symbol, timeframe, limit)
         except Exception as exc:

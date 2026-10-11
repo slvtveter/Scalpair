@@ -67,7 +67,7 @@ async def test_candle_route_rejects_stale_instrument_source():
     stream = SimpleNamespace(feed=SimpleNamespace(name="bybit"), _generation=2, history=HistoryCache())
     req = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(market_state=state, streamer=stream)))
     with pytest.raises(HTTPException) as exc:
-        await candles(req, "BTCUSDT", 300, "1m", "BI-F:FUTURES:BTCUSDT")
+        await candles(req, "BTCUSDT", 300, "1m", "BI-F:SPOT:BTCUSDT")
     assert exc.value.status_code == 409
     await stream.history.close()
 
