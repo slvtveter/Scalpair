@@ -342,7 +342,9 @@ syntax/static-server checks did not establish functional or visual acceptance.
   Density pills retain their category styling, matching the reference map's
   visual hierarchy without implying unsupported full-book coverage.
 - Frontend syntax, 36 tests and whitespace checks pass; production deployment
-  is pending for this visual update.
+  pass. After Render deployment `1dd5ab4`, `/en` contains the coverage and
+  category legend, while the live density API reports 25 received levels per
+  side and `complete_percent_range=false`.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
