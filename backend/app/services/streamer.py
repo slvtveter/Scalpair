@@ -51,6 +51,9 @@ class MarketStreamer:
         self.publish = publish
         self.feed: FeedConnector | None = None
         self.extra_feeds: list[FeedConnector] = []  # supplementary feeds (hybrid mode)
+        self.multi_mode = False
+        self.source_states: dict[str, MarketState] = {}
+        self.source_symbols: dict[str, list[str]] = {}
         self.top_symbols: list[str] = []
         self._tasks: list[asyncio.Task] = []
         self._stop = asyncio.Event()
@@ -76,8 +79,8 @@ class MarketStreamer:
     # ------------------------------------------------------------------
     # Callbacks (feed → state)
     # ------------------------------------------------------------------
-    def _make_callbacks(self) -> FeedCallbacks:
-        state = self.state
+    def _make_callbacks(self, target_state: MarketState | None = None) -> FeedCallbacks:
+        state = target_state or self.state
         generation = self._generation
 
         async def on_book(sym, bids, asks, ts_ms):
@@ -139,6 +142,8 @@ class MarketStreamer:
             return [OkxSwapFeed(callbacks)]
         if mode == "mock":
             return [MockFeed(callbacks)]
+        if mode == "multi":
+            return [binance, bybit, BinanceSpotFeed(callbacks), BybitSpotFeed(callbacks), OkxSwapFeed(callbacks)]
         return [binance, bybit, BinanceSpotFeed(callbacks), BybitSpotFeed(callbacks), OkxSwapFeed(callbacks), MockFeed(callbacks)]  # auto
 
     async def _select_feed(self) -> FeedConnector:
@@ -159,6 +164,9 @@ class MarketStreamer:
     # Lifecycle
     # ------------------------------------------------------------------
     async def start(self) -> None:
+        if self.settings.data_feed == "multi":
+            await self._start_multi()
+            return
         self.feed = await self._select_feed()
         self.state.feed_mode = self.feed.name
         tickers = []
@@ -181,6 +189,92 @@ class MarketStreamer:
             asyncio.create_task(self._live_recovery_loop(), name="live-recovery"),
             asyncio.create_task(self.market_caps.run(lambda: self.top_symbols), name="market-cap-refresh"),
         ]
+
+    async def _start_multi(self) -> None:
+        """Run isolated source feeds and merge only at snapshot serialization."""
+        specs = [("binance", BinanceFuturesFeed), ("bybit", BybitLinearFeed),
+                 ("binance_spot", BinanceSpotFeed), ("bybit_spot", BybitSpotFeed),
+                 ("okx", OkxSwapFeed)]
+
+        async def probe(name, cls):
+            temporary = MarketState()
+            feed = cls(self._make_callbacks(temporary))
+            try:
+                tickers = await asyncio.wait_for(feed.fetch_universe(self.settings.top_symbols), timeout=FEED_PROBE_TIMEOUT_S)
+                return name, feed, temporary, tickers or []
+            except Exception as exc:  # noqa: BLE001
+                log.warning("multi source %s unavailable: %s", name, exc)
+                return name, feed, temporary, []
+
+        results = await asyncio.gather(*(probe(name, cls) for name, cls in specs))
+        live = [result for result in results if result[3]]
+        if not live:
+            raise RuntimeError("DATA_FEED=multi: no source returned a universe")
+        primary_name, primary_feed, primary_state, primary_tickers = live[0]
+        self.multi_mode = True
+        self.state.symbols = primary_state.symbols
+        self.state.feed_mode = primary_name
+        self.feed = primary_feed
+        self.feed.callbacks = self._make_callbacks(self.state)
+        self._seed_universe(primary_tickers)
+        self.source_states = {primary_name: self.state}
+        self.source_symbols = {primary_name: list(self.top_symbols)}
+        self.extra_feeds = []
+        for name, feed, source_state, tickers in live[1:]:
+            symbols = []
+            for ticker in tickers:
+                symbol = ticker.get("symbol")
+                if not symbol:
+                    continue
+                source_state.get(symbol).on_ticker_24h(
+                    float(ticker.get("last_price") or 0),
+                    float(ticker.get("price_change_pct_24h") or 0),
+                    float(ticker.get("quote_volume_24h") or 0),
+                )
+                symbols.append(symbol)
+            feed.callbacks = self._make_callbacks(source_state)
+            feed.set_universe(symbols)
+            self.source_states[name] = source_state
+            self.source_symbols[name] = symbols
+            self.extra_feeds.append(feed)
+        self.feed.set_universe(self.top_symbols)
+        all_feeds = [self.feed, *self.extra_feeds]
+        self._tasks = [asyncio.create_task(feed.run(), name=f"{feed.name}-run") for feed in all_feeds]
+        self._tasks += [
+            asyncio.create_task(self._multi_metrics_loop(), name="multi-metrics-loop"),
+            asyncio.create_task(self._scoring_loop(), name="multi-scoring-loop"),
+            asyncio.create_task(self._multi_backfill_task(), name="multi-backfill"),
+            asyncio.create_task(self.market_caps.run(lambda: self.top_symbols), name="market-cap-refresh"),
+        ]
+        log.info("multi source runtime started: %s", ", ".join(self.source_states))
+
+    async def _multi_metrics_loop(self) -> None:
+        while not self._stop.is_set():
+            started = time.perf_counter()
+            now_ms = time.time() * 1000
+            for name, source_state in self.source_states.items():
+                for symbol in self.source_symbols.get(name, []):
+                    state = source_state.symbols.get(symbol)
+                    if state is None:
+                        continue
+                    analytics.refresh_walls(state, self.settings.wall_multiplier)
+                    analytics.compute_metrics(source_state, state, now_ms)
+            self.publish(self.build_snapshot())
+            await asyncio.sleep(max(0.05, METRICS_TICK_S - (time.perf_counter() - started)))
+
+    async def _multi_backfill_task(self) -> None:
+        async def backfill(name, feed):
+            source_state = self.source_states[name]
+            for symbol in self.source_symbols.get(name, []):
+                try:
+                    rows = await asyncio.wait_for(feed.fetch_klines(symbol, limit=300), timeout=12)
+                    state = source_state.get(symbol)
+                    for t, o, h, l, c, v in rows:
+                        state.on_candle(t, o, h, l, c, v)
+                except Exception:
+                    continue
+        feeds = [(self.feed.name, self.feed), *[(feed.name, feed) for feed in self.extra_feeds]]
+        await asyncio.gather(*(backfill(name, feed) for name, feed in feeds))
 
     async def _candle_backfill_task(self) -> None:
         await self._seed_candles()
@@ -527,6 +621,47 @@ class MarketStreamer:
             log.info("ALERT %s score=%.0f tag=%s", pick.symbol, pick.scalp_score, pick.tag)
         self.alerts = self.alerts[-50:]
 
+    def _serialize_source_row(self, source_name: str, source_state: MarketState, symbol: str) -> dict[str, Any] | None:
+        state = source_state.symbols.get(symbol)
+        if state is None:
+            return None
+        venue = venue_for_feed(source_name)
+        market = market_for_feed(source_name)
+        cap = self.market_caps.records.get(self.market_caps._key(symbol))
+        if cap:
+            state.asset_id = cap.asset_id
+            state.market_cap_usd = cap.market_cap_usd
+            state.market_cap_source = cap.source
+            state.market_cap_updated_at = cap.updated_at
+        metrics = state.metrics
+        walls = sorted(state.walls.values(), key=lambda wall: wall["notional_usd"], reverse=True)[:5]
+        return {
+            "symbol": symbol, "instrument_id": f"{venue}:{market}:{symbol}",
+            "venue": venue, "market": market, "price": metrics.price,
+            "change5m": metrics.price_change_5m_pct, "change24h": metrics.price_change_24h_pct,
+            "vol1m": metrics.volume_1m_usd, "vol24h": state.quote_volume_24h,
+            "assetId": state.asset_id, "marketCapUsd": state.market_cap_usd,
+            "marketCapSource": state.market_cap_source, "marketCapUpdatedAt": state.market_cap_updated_at,
+            "vol5m": metrics.volume_5m_usd, "surge": metrics.volume_surge_ratio,
+            "imbalance": metrics.book_imbalance, "spreadBps": metrics.spread_bps,
+            "depth": metrics.depth_notional_usd, "tps": metrics.trade_velocity_tps,
+            "takerBuy": metrics.taker_buy_ratio_1m, "bbPctile": metrics.bb_width_pctile,
+            "funding": metrics.funding_rate, "nearestWall": metrics.nearest_wall_distance_pct,
+            "natr": metrics.natr_pct, "speed": metrics.speed_pct_per_min,
+            "range5m": metrics.range_5m_pct, "surgeClosed": metrics.surge_closed,
+            "levelDist": metrics.level_dist_pct, "levelKind": metrics.level_kind,
+            "score": None, "tag": None, "thesis": None,
+            "walls": [{"side": wall["side"], "price": wall["price"], "notional": wall["notional_usd"],
+                       "distance": wall["distance_pct"], "eat": wall.get("seconds_to_eat"),
+                       "category": wall.get("category"), "brp": wall.get("brp_usd")} for wall in walls],
+            "levels": [{"kind": zone.kind, "low": zone.low, "high": zone.high, "mid": zone.mid,
+                        "touches": zone.touches, "timeframe": "1m"}
+                       for zone in sorted(state.cascades, key=lambda zone: zone.touches, reverse=True)[:10]],
+            "bookTs": state.book_ts_ms,
+            "densityCoverage": {"kind": "top_n_levels", "levelsBid": state.density_bid_levels,
+                                "levelsAsk": state.density_ask_levels, "completePercentRange": False},
+        }
+
     # ------------------------------------------------------------------
     # Snapshot serialization
     # ------------------------------------------------------------------
@@ -609,6 +744,15 @@ class MarketStreamer:
                     },
                 }
             )
+        if self.multi_mode:
+            for source_name, source_state in self.source_states.items():
+                if source_state is self.state:
+                    continue
+                for symbol in self.source_symbols.get(source_name, []):
+                    row = self._serialize_source_row(source_name, source_state, symbol)
+                    if row is not None:
+                        symbols.append(row)
+
         picks = [
             {
                 "symbol": p.symbol,
@@ -627,14 +771,14 @@ class MarketStreamer:
         return {
             "type": "snapshot",
             "ts": now_ms,
-            "feed": self.state.feed_mode,
+            "feed": "multi" if self.multi_mode else self.state.feed_mode,
             "feedDegraded": self.feed_degraded,
             "sourceGeneration": self._generation,
             "symbols": symbols,
             "picks": picks,
             "alerts": self.alerts[-10:],
             "stats": {
-                "tracked": len(self.top_symbols),
+                "tracked": sum(len(values) for values in self.source_symbols.values()) if self.multi_mode else len(self.top_symbols),
                 "ingested": self.state.messages_ingested,
                 "latencyMs": round(self.state.ingest_latency_ema_ms, 1),
             },

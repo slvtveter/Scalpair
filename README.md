@@ -42,7 +42,7 @@ No keys to configure, nothing to sign up for. The screener boots straight into l
 
 ## Feed resilience (Binance/Bybit futures and spot)
 
-`DATA_FEED=auto` (default) probes exchanges in order and degrades gracefully. Explicit `DATA_FEED=binance_spot` or `DATA_FEED=bybit_spot` selects a USDT spot adapter:
+`DATA_FEED=auto` (default) probes exchanges in order and degrades gracefully. Explicit `DATA_FEED=binance_spot` or `DATA_FEED=bybit_spot` selects a USDT spot adapter; `DATA_FEED=multi` runs every reachable Spot/Futures adapter with isolated instrument state:
 
 1. **Binance USDⓈ-M futures** (`wss://fstream.binance.com`) — primary: `depth20@100ms`,
    `aggTrade`, `kline_1m`, `!ticker@arr`.

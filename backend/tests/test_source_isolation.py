@@ -128,6 +128,18 @@ def test_snapshot_24h_volume_is_quote_turnover_not_short_window_volume():
     assert row['vol1m'] == 123
 
 
+def test_multi_snapshot_keeps_secondary_instrument_identity():
+    s = streamer()
+    s._activate_feed(Feed('bybit'), universe(100))
+    secondary = MarketState()
+    secondary.get('BTCUSDT').on_ticker_24h(101, 2, 2_000_000)
+    s.multi_mode = True
+    s.source_states = {'bybit': s.state, 'binance_spot': secondary}
+    s.source_symbols = {'bybit': ['BTCUSDT'], 'binance_spot': ['BTCUSDT']}
+    rows = s.build_snapshot()['symbols']
+    assert {row['instrument_id'] for row in rows} == {'BY-F:FUTURES:BTCUSDT', 'BI-S:SPOT:BTCUSDT'}
+
+
 async def test_catalog_includes_source_and_skips_uninitialized_symbols():
     import json
     from types import SimpleNamespace

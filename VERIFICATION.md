@@ -436,3 +436,10 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - `GET /api/v1/instruments?all_sources=true` discovers Binance Futures/Spot, Bybit Futures/Spot and OKX Futures in parallel REST requests.
 - Every row carries `VENUE:MARKET:SYMBOL`; non-active discovery rows are explicitly marked `live: false`.
 - Search now uses this catalog, so identical tickers from Spot and Futures remain distinct when opening Focus.
+
+## Isolated multi-source runtime
+
+- Added opt-in `DATA_FEED=multi`: each reachable Binance/Bybit Spot/Futures or OKX source receives an isolated `MarketState`; snapshots merge only at serialization with stable `VENUE:MARKET:SYMBOL` identities.
+- Secondary rows carry their own book, candles, density and metrics state; the existing `auto` path remains single-source failover.
+- Regression coverage verifies that identical BTCUSDT rows retain `BY-F:FUTURES` and `BI-S:SPOT` identities.
+- Multi mode is intentionally opt-in because it multiplies upstream WebSocket and REST backfill budgets.
