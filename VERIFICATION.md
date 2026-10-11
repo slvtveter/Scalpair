@@ -625,3 +625,11 @@ syntax/static-server checks did not establish functional or visual acceptance.
   1/3/5/10% Liquidity Map range now survives login and workspace restoration;
   the API regression test verifies the value is retained instead of silently
   dropped.
+
+## Persisted active workspace group
+
+- `activeGroup` is now included in the authenticated preferences allowlist and
+  payload. After login on a new device, the selected All/Favorites/custom group
+  is restored only when it references a valid saved group.
+- API and frontend regression tests cover the round-trip; frontend suite now has
+  44 passing tests.

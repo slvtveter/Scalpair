@@ -177,6 +177,7 @@ class TestAuth:
         preferences = {
             "focusLayout": 4,
             "densityDepth": 10,
+            "activeGroup": "watch",
             "focusVenue": "BY-F",
             "syncCrosshair": False,
             "syncRange": True,
@@ -189,6 +190,7 @@ class TestAuth:
         saved = r.json()["preferences"]
         assert saved["focusLayout"] == 4
         assert saved["densityDepth"] == 10
+        assert saved["activeGroup"] == "watch"
         assert saved["focusVenue"] == "BY-F"
         assert saved["syncCrosshair"] is False
         assert saved["syncRange"] is True

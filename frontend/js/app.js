@@ -1156,6 +1156,7 @@ function preferencePayload() {
   return {
     densityDepth: S.densityDepth,
     groups: S.groups,
+    activeGroup: S.activeGroup,
     hidden: [...S.hidden],
     order: S.order,
     filters: S.filters,
@@ -1186,6 +1187,7 @@ async function syncPreferences() {
     const p = body.preferences || {};
     if (!Object.keys(p).length) { await persistPreferences(); return; }
     if (Array.isArray(p.groups)) S.groups = p.groups.filter(g => g && typeof g.id === "string" && typeof g.name === "string" && GROUP_COLORS[g.color] && Array.isArray(g.symbols));
+    if (typeof p.activeGroup === "string" && (p.activeGroup === "all" || p.activeGroup === "watch" || S.groups.some(g => g.id === p.activeGroup))) S.activeGroup = p.activeGroup;
     if (Array.isArray(p.hidden)) S.hidden = new Set(p.hidden);
     if (Array.isArray(p.order)) S.order = p.order;
     if (p.filters && typeof p.filters === "object") S.filters = p.filters;
@@ -1205,7 +1207,7 @@ async function syncPreferences() {
     if (p.paneOverlays && typeof p.paneOverlays === "object" && !Array.isArray(p.paneOverlays)) S.paneOverlays = p.paneOverlays;
     if ([1, 2, 4].includes(Number(p.focusLayout))) S.focusLayout = Number(p.focusLayout);
     if (typeof p.focusVenue === "string" && p.focusVenue.length <= 16) S.focusVenue = p.focusVenue;
-    for (const [key, value] of Object.entries({groups:S.groups, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls, densityDepth:S.densityDepth, sound:S.soundOn, dndUntil:S.dndUntil, syncCrosshair:S.syncCrosshair, syncRange:S.syncRange, paneOverlays:S.paneOverlays, focusLayout:S.focusLayout, focusVenue:S.focusVenue})) LS.set(key, value);
+    for (const [key, value] of Object.entries({groups:S.groups, activeGroup:S.activeGroup, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls, densityDepth:S.densityDepth, sound:S.soundOn, dndUntil:S.dndUntil, syncCrosshair:S.syncCrosshair, syncRange:S.syncRange, paneOverlays:S.paneOverlays, focusLayout:S.focusLayout, focusVenue:S.focusVenue})) LS.set(key, value);
     syncDndSelect();
     renderGroups(); renderMarketFilters(); updateSortControl(); renderBoard(); renderCoinList();
   } catch {}

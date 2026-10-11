@@ -416,3 +416,9 @@ test('multi-source snapshot marks an unhealthy source as a degraded feed', () =>
     bybit:{status:'ok'},binance_spot:{status:'degraded'}},symbols:[]})`);
   assert.equal(a.run('S.feedDegraded'), true);
 });
+
+test('active workspace group is included in server preference payload', () => {
+  const a = app();
+  a.run(`S.activeGroup='watch'`);
+  assert.equal(a.run('preferencePayload().activeGroup'), 'watch');
+});
