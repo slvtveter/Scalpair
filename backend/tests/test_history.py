@@ -71,6 +71,27 @@ async def test_candle_route_rejects_stale_instrument_source():
     assert exc.value.status_code == 409
     await stream.history.close()
 
+
+async def test_candle_route_can_fetch_an_explicit_alternate_source(monkeypatch):
+    import app.api.routes as routes
+
+    state = MarketState(); state.feed_mode = "bybit"; st = state.get("BTCUSDT")
+    st.on_candle(60000, 100, 110, 90, 105, 20)
+
+    class OtherFeed:
+        name = "binance"
+
+        async def fetch_klines(self, symbol, limit=300, timeframe="1m"):
+            assert symbol == "BTCUSDT" and timeframe == "1m"
+            return [(0, 1, 2, 0.5, 1.5, 3)]
+
+    monkeypatch.setattr(routes, "_history_source_for_venue", lambda venue: OtherFeed())
+    stream = SimpleNamespace(feed=SimpleNamespace(name="bybit"), _generation=2, history=HistoryCache())
+    req = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(market_state=state, streamer=stream)))
+    data = json.loads((await candles(req, "BTCUSDT", 300, "1m", "BI-F:FUTURES:BTCUSDT")).body)
+    assert data["venue"] == "BI-F" and data["candles"][0]["o"] == 1 and data["walls"] == []
+    await stream.history.close()
+
 @pytest.mark.parametrize('module_name,cls,param,expected', [('binance','BinanceFuturesFeed','interval','1d'),('bybit','BybitLinearFeed','interval','D'),('okx','OkxSwapFeed','bar','1Dutc')])
 async def test_daily_exchange_parameters(monkeypatch,module_name,cls,param,expected):
     import importlib

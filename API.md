@@ -15,7 +15,7 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `GET /screeners/ai-picks?top=&min_score=` | top setups + thesis |
 | `GET /screeners/score-alerts` | recent auto score≥85 alerts |
 | `GET /markets/symbols` | tracked universe |
-| `GET /markets/{SYMBOL}/candles?limit=300&instrument_id=` | 1m OHLCV + walls + pivot cascade levels; mismatched source identity returns 409 |
+| `GET /markets/{SYMBOL}/candles?limit=300&instrument_id=` | OHLCV + walls + pivot cascade levels; an explicit BI-F/BY-F/OK-F `instrument_id` fetches that venue's history (source-specific overlays are omitted), mismatched identity returns 409 |
 | `WS /ws/live-feed` | snapshot stream ≤6 msg/s; first message `{"token": jwt}` → pro tier, else free (10 symbols, delayed) |
 
 ## Auth

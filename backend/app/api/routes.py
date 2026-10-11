@@ -21,7 +21,12 @@ from app.api.auth import User, current_user
 from app.instruments import venue_for_feed
 from app.config import get_settings
 from app.models import HealthReport
-from app.history import TIMEFRAMES, aggregate_history
+from app.history import TIMEFRAMES, aggregate_history, normalize_rows
+from app.feeds.base import FeedCallbacks
+from app.feeds.binance import BinanceFuturesFeed
+from app.feeds.bybit import BybitLinearFeed
+from app.feeds.okx import OkxSwapFeed
+from app.feeds.mock import MockFeed
 
 log = logging.getLogger("scalpair.api")
 
@@ -31,6 +36,20 @@ START_TIME = time.time()
 
 FREE_TIER_SYMBOLS = 10
 FREE_TIER_UPDATE_DIVISOR = 4  # ~15s effective delay at 0.5Hz metrics cadence
+
+
+async def _noop_feed_callback(*args: Any) -> None:
+    return None
+
+
+def _history_source_for_venue(venue: str):
+    callbacks = FeedCallbacks(_noop_feed_callback, _noop_feed_callback, _noop_feed_callback, _noop_feed_callback, _noop_feed_callback)
+    return {
+        "BI-F": BinanceFuturesFeed(callbacks),
+        "BY-F": BybitLinearFeed(callbacks),
+        "OK-F": OkxSwapFeed(callbacks),
+        "DEMO": MockFeed(callbacks),
+    }.get(venue)
 
 
 # ---------------------------------------------------------------------------
@@ -257,19 +276,32 @@ async def candles(
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"unknown symbol {symbol}")
     streamer = request.app.state.streamer
     feed, generation = streamer.feed, streamer._generation
-    venue = venue_for_feed(feed.name if feed else "")
+    active_venue = venue_for_feed(feed.name if feed else "")
+    venue = active_venue
     expected_instrument = f"{venue}:FUTURES:{st.symbol}"
+    selected_feed = feed
+    alternate_source = False
     if instrument_id and instrument_id != expected_instrument:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Instrument source changed; retry with the active instrument")
+        pieces = instrument_id.split(":")
+        if len(pieces) != 3 or pieces[1] != "FUTURES" or pieces[2].upper() != st.symbol:
+            raise HTTPException(status.HTTP_409_CONFLICT, "Instrument source changed; retry with the active instrument")
+        selected_feed = _history_source_for_venue(pieces[0])
+        if selected_feed is None:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unsupported history source")
+        venue = pieces[0]
+        alternate_source = True
     source = "stream"
     history = aggregate_history(list(st.candles), TIMEFRAMES[timeframe])[-limit:]
     limited = timeframe != "1m"
-    if timeframe != "1m" and feed is not None and hasattr(feed, "fetch_klines"):
+    if (timeframe != "1m" or alternate_source) and selected_feed is not None and hasattr(selected_feed, "fetch_klines"):
         try:
-            history = await streamer.history.get(generation, feed, st.symbol, timeframe, limit)
+            if alternate_source:
+                history = normalize_rows(await selected_feed.fetch_klines(st.symbol, limit=limit, timeframe=timeframe))
+            else:
+                history = await streamer.history.get(generation, selected_feed, st.symbol, timeframe, limit)
         except Exception as exc:
             raise HTTPException(503, "Exchange history temporarily unavailable") from exc
-        if generation != streamer._generation or feed is not streamer.feed:
+        if not alternate_source and (generation != streamer._generation or feed is not streamer.feed):
             raise HTTPException(409, "Market source changed; retry history request")
         source = "exchange_rest"
         limited = False
@@ -286,7 +318,7 @@ async def candles(
             "limitedHistory": limited,
             "levelTimeframe": "1m",
             "candles": history,
-            "walls": [
+            "walls": [] if alternate_source else [
                 {
                     "side": w["side"],
                     "price": w["price"],
@@ -295,7 +327,7 @@ async def candles(
                 }
                 for w in sorted(st.walls.values(), key=lambda w: w["notional_usd"], reverse=True)[:6]
             ],
-            "levels": [
+            "levels": [] if alternate_source else [
                 {
                     "kind": z.kind,
                     "low": z.low,

@@ -256,6 +256,11 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - After Render deployment `de9e638`, the live candle endpoint returned HTTP
   200 with `instrument_id=BY-F:FUTURES:BTCUSDT`, `venue=BY-F` and
   `market=FUTURES`; a mismatched source is guarded by the same 409 contract.
+- Focus now exposes a source selector and can request Binance, Bybit or OKX
+  history explicitly. Alternate-source responses intentionally omit active
+  venue walls/levels so overlays are never mixed with another exchange.
+  Backend regression coverage includes the alternate-source path; deployment
+  of this selector is pending.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 

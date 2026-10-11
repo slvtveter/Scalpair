@@ -100,6 +100,7 @@ const S = {
   syncRange: LS.get("syncRange", false),
   paneOverlays: LS.get("paneOverlays", {}),
   focusLayout: [1,2,4].includes(LS.get("focusLayout",2)) ? LS.get("focusLayout",2) : 2,
+  focusVenue: LS.get("focusVenue", ""),
   watch: new Set(LS.get("watch", [])),
   groups: LS.get("groups", []),
   activeGroup: LS.get("activeGroup", "all"),
@@ -1198,7 +1199,7 @@ $("alert-create").addEventListener("click", async () => {
   if (!S.jwt) { toast(t("authNeeded"), "warn"); $("bell").click(); return; }
   const body = {
     symbol: chartSym,
-    instrument_id: S.bySym.get(chartSym)?.instrument_id || undefined,
+    instrument_id: focusInstrumentId() || undefined,
     rule_type: $("alert-type").value,
     threshold: parseFloat($("alert-threshold").value),
     cooldown_s: 300,
@@ -1338,6 +1339,27 @@ document.querySelectorAll(".view-chip").forEach((btn, index) => btn.addEventList
 const modal = $("chart-modal");
 let chartSym = null;
 let focusReturn = null;
+const focusSourceSelect = $("focus-source");
+const focusVenueNames = {"BI-F":"Binance Futures", "BY-F":"Bybit Futures", "OK-F":"OKX Futures", "DEMO":"Demo"};
+function focusInstrumentId() {
+  const row = S.bySym.get(chartSym);
+  return chartSym ? `${S.focusVenue || row?.venue || "UNKNOWN"}:FUTURES:${chartSym}` : "";
+}
+function setupFocusSource(row) {
+  const venues = [...new Set([row?.venue, "BI-F", "BY-F", "OK-F"].filter(Boolean))];
+  focusSourceSelect.innerHTML = venues.map(v => `<option value="${esc(v)}">${esc(focusVenueNames[v] || v)}</option>`).join("");
+  if (!venues.includes(S.focusVenue)) S.focusVenue = row?.venue || venues[0];
+  focusSourceSelect.value = S.focusVenue;
+  focusSourceSelect.classList.remove("hidden");
+  const host = document.querySelector(".modal-head-right");
+  if (host && focusSourceSelect.parentElement !== host) host.prepend(focusSourceSelect);
+}
+focusSourceSelect.addEventListener("change", () => {
+  S.focusVenue = focusSourceSelect.value;
+  LS.set("focusVenue", S.focusVenue);
+  for (const pane of focusPanes) { pane.candles = []; pane.series = []; pane.walls = []; pane.levels = []; }
+  refreshFocus(true);
+});
 
 const chart = {
   index: 0, candles: [], series: [], tfMin: 1, sourceTf: 1, historyStatus: "", walls: [], levels: [],
@@ -1444,8 +1466,9 @@ async function openChart(symbol) {
   updateHiddenControl();
   updateChartGroupControl();
   const r = S.bySym.get(symbol);
+  setupFocusSource(r);
   const pick = S.picks.find((p) => p.symbol === symbol);
-  $("chart-title").textContent = `${symbol} · ${r?.venue || "—"} · ${r?.market || "FUTURES"} · ${timeframeName(chart.tfMin)}`;
+  $("chart-title").textContent = `${symbol} · ${focusVenueNames[S.focusVenue] || S.focusVenue || r?.venue || "—"} · ${r?.market || "FUTURES"} · ${timeframeName(chart.tfMin)}`;
   $("chart-tag").textContent = pick?.tag || r?.tag || "—";
   $("chart-tag").className = `tag-cell ${tagClass(pick?.tag || r?.tag)}`;
   $("chart-thesis").textContent = pick?.thesis || r?.thesis || "—";
@@ -1460,7 +1483,7 @@ async function openChart(symbol) {
 
 async function refreshChart(resetView = false, chart = focusPanes[0]) {
   const symbol = chartSym, epoch = S.dataEpoch, tf = chart.tfMin;
-  const instrumentId = S.bySym.get(symbol)?.instrument_id || "";
+  const instrumentId = focusInstrumentId();
   const requestId = chart.requestId = (chart.requestId || 0) + 1;
   if (!chartSym || modal.classList.contains("hidden")) return;
   if (resetView) setHistoryStatus(S.lang === "ru" ? "Загрузка истории…" : "Loading history…", chart);
@@ -1490,7 +1513,7 @@ async function refreshChart(resetView = false, chart = focusPanes[0]) {
 function closeChart() {
   if (!S.focusOpen) return;
   if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
-  modal.classList.add("hidden"); chartSym = null; S.focusOpen = false;
+  modal.classList.add("hidden"); focusSourceSelect.classList.add("hidden"); chartSym = null; S.focusOpen = false;
   if (focusReturn?.isConnected) focusReturn.focus();
   else $("search").focus();
 }
