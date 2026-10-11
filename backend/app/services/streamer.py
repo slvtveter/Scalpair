@@ -144,7 +144,9 @@ class MarketStreamer:
             return [MockFeed(callbacks)]
         if mode == "multi":
             return [binance, bybit, BinanceSpotFeed(callbacks), BybitSpotFeed(callbacks), OkxSwapFeed(callbacks)]
-        return [binance, bybit, BinanceSpotFeed(callbacks), BybitSpotFeed(callbacks), OkxSwapFeed(callbacks), MockFeed(callbacks)]  # auto
+        # Prefer OKX before Bybit: some Render regions receive HTTP 403 from
+        # Bybit's public websocket edge even though its REST probe succeeds.
+        return [binance, OkxSwapFeed(callbacks), bybit, BinanceSpotFeed(callbacks), BybitSpotFeed(callbacks), MockFeed(callbacks)]  # auto
 
     async def _select_feed(self) -> FeedConnector:
         for feed in self._candidate_feeds():
@@ -518,10 +520,10 @@ class MarketStreamer:
             current = self.feed.name if self.feed else ""
             candidates = [
                 BinanceFuturesFeed(self._make_callbacks()),
+                OkxSwapFeed(self._make_callbacks()),
                 BybitLinearFeed(self._make_callbacks()),
                 BinanceSpotFeed(self._make_callbacks()),
                 BybitSpotFeed(self._make_callbacks()),
-                OkxSwapFeed(self._make_callbacks()),
             ]
             for candidate in candidates:
                 if candidate.name == current:
