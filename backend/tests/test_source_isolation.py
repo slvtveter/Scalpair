@@ -148,6 +148,17 @@ def test_multi_health_counts_all_source_symbols():
     assert _tracked_count(s) == 3
 
 
+def test_multi_market_cap_symbols_cover_each_source_once():
+    s = streamer()
+    s.multi_mode = True
+    s.top_symbols = ['BTCUSDT']
+    s.source_symbols = {
+        'bybit': ['BTCUSDT', 'ETHUSDT'],
+        'binance_spot': ['BTCUSDT', 'SOLUSDT'],
+    }
+    assert s._market_cap_symbols() == ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']
+
+
 async def test_catalog_includes_source_and_skips_uninitialized_symbols():
     import json
     from types import SimpleNamespace

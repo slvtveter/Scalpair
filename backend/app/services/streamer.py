@@ -151,6 +151,16 @@ class MarketStreamer:
         # Bybit's public websocket edge even though its REST probe succeeds.
         return [binance, OkxSwapFeed(callbacks), bybit, BinanceSpotFeed(callbacks), BybitSpotFeed(callbacks), MockFeed(callbacks)]  # auto
 
+    def _market_cap_symbols(self) -> list[str]:
+        """Return every source symbol needing asset-level enrichment."""
+        if not self.multi_mode:
+            return list(self.top_symbols)
+        return list(dict.fromkeys(
+            symbol
+            for symbols in self.source_symbols.values()
+            for symbol in symbols
+        ))
+
     async def _select_feed(self) -> FeedConnector:
         candidates = self._candidate_feeds()
         # An explicit venue remains first choice, but a stale dashboard
@@ -209,7 +219,7 @@ class MarketStreamer:
             asyncio.create_task(self._candle_backfill_task(), name="candle-backfill"),
             asyncio.create_task(self._levels_loop(), name="levels-loop"),
             asyncio.create_task(self._live_recovery_loop(), name="live-recovery"),
-            asyncio.create_task(self.market_caps.run(lambda: self.top_symbols), name="market-cap-refresh"),
+            asyncio.create_task(self.market_caps.run(self._market_cap_symbols), name="market-cap-refresh"),
         ]
 
     async def _start_multi(self) -> None:
@@ -268,7 +278,7 @@ class MarketStreamer:
             asyncio.create_task(self._scoring_loop(), name="multi-scoring-loop"),
             asyncio.create_task(self._multi_backfill_task(), name="multi-backfill"),
             asyncio.create_task(self._levels_loop(), name="multi-levels-loop"),
-            asyncio.create_task(self.market_caps.run(lambda: self.top_symbols), name="market-cap-refresh"),
+            asyncio.create_task(self.market_caps.run(self._market_cap_symbols), name="market-cap-refresh"),
         ]
         log.info("multi source runtime started: %s", ", ".join(self.source_states))
 

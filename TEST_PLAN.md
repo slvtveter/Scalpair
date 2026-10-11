@@ -1,6 +1,6 @@
 # Scalpair — TEST PLAN
 
-## Автоматические (pytest, 141 backend + 41 frontend тест — `cd backend && ./.venv/bin/pytest`)
+## Автоматические (pytest, 142 backend + 41 frontend тест — `cd backend && ./.venv/bin/pytest`)
 
 | Suite | Покрывает |
 |---|---|

@@ -591,4 +591,13 @@ syntax/static-server checks did not establish functional or visual acceptance.
   active market.
 - The UI retains the explicit limited-depth coverage label, so a top-N book is
   not presented as complete 10% market coverage. Backend and frontend suites
-  pass: 141 and 41 tests respectively.
+  pass: 142 and 41 tests respectively.
+
+## Multi-source market-cap enrichment
+
+- The market-cap refresher now receives the union of symbols from every active
+  source in multi mode, deduplicated by ticker before the CoinGecko request.
+  A Spot-only or Futures-only listing no longer depends on the primary source
+  universe to receive asset-level capitalization.
+- Regression coverage verifies deterministic union ordering and de-duplication;
+  the backend suite now has 142 passing tests.
