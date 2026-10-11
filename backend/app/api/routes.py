@@ -74,8 +74,11 @@ async def health(request: Request) -> HealthReport:
     # A connector can pass the universe probe and still fail to ingest WS
     # events. After a short warmup that state is degraded, never healthy.
     no_ingest_after_warmup = state.messages_ingested == 0 and uptime > 30
+    no_websocket_after_warmup = bool(
+        streamer and streamer.feed and streamer.feed.stats.connects == 0 and uptime > 10
+    )
     return HealthReport(
-        status="ok" if not streamer.feed_degraded and not no_ingest_after_warmup and (last_age is None or last_age < 30_000) else "degraded",
+        status="ok" if not streamer.feed_degraded and not no_ingest_after_warmup and not no_websocket_after_warmup and (last_age is None or last_age < 30_000) else "degraded",
         uptime_s=round(uptime, 1),
         active_feeds=feeds,
         active_ws_clients=broadcaster.client_count,
@@ -95,12 +98,15 @@ async def ready(request: Request) -> JSONResponse:
     streamer = request.app.state.streamer
     if streamer is None or not streamer.top_symbols:
         raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "market streamer is not initialized")
+    ws_unavailable = bool(
+        streamer.feed and streamer.feed.stats.connects == 0 and time.time() - START_TIME > 10
+    )
     return JSONResponse(
         {
             "ready": True,
             "feed": request.app.state.market_state.feed_mode,
             "tracked_symbols": len(streamer.top_symbols),
-            "market_status": "degraded" if streamer.feed_degraded else "live",
+            "market_status": "degraded" if streamer.feed_degraded or ws_unavailable else "live",
         }
     )
 
