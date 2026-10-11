@@ -283,7 +283,9 @@ syntax/static-server checks did not establish functional or visual acceptance.
   instrument identity; it no longer re-aggregates a short 1m cache for the
   board. Unknown or unavailable history remains explicitly empty/stale.
 - All 35 frontend tests, JavaScript/Python syntax checks and whitespace checks
-  pass. Production deployment verification is pending.
+  pass. After Render deployment `5eafa6f`, the 4h BTC endpoint returned
+  `timeframe=4h`, `historySource=exchange_rest`, `limitedHistory=false` and
+  native bars from Bybit; the published `/en` markup contains the 1D option.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
