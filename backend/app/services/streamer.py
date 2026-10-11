@@ -152,20 +152,35 @@ class MarketStreamer:
         return [binance, OkxSwapFeed(callbacks), bybit, BinanceSpotFeed(callbacks), BybitSpotFeed(callbacks), MockFeed(callbacks)]  # auto
 
     async def _select_feed(self) -> FeedConnector:
-        for feed in self._candidate_feeds():
+        candidates = self._candidate_feeds()
+        # An explicit venue remains first choice, but a stale dashboard
+        # variable must not strand production on a source whose WS edge is
+        # blocked. Probe other live adapters before falling back to mock.
+        if self.settings.data_feed not in ("auto", "mock", "multi"):
+            selected = {feed.name for feed in candidates}
+            candidates.extend(feed for feed in self._auto_candidates() if feed.name not in selected)
+        for feed in candidates:
             if isinstance(feed, MockFeed):
                 log.warning("no live feed reachable — falling back to MOCK feed (offline demo mode)")
                 return feed
             try:
                 tickers = await asyncio.wait_for(feed.fetch_universe(3), timeout=FEED_PROBE_TIMEOUT_S)
                 if tickers:
-                    if self.settings.data_feed == "auto":
+                    if self.settings.data_feed != "mock":
                         await asyncio.wait_for(feed.probe_websocket([t["symbol"] for t in tickers]), timeout=8)
                     log.info("selected feed: %s (REST/WS probe ok, %d tickers)", feed.name, len(tickers))
                     return feed
             except Exception as exc:  # noqa: BLE001
                 log.warning("feed %s probe failed: %s", feed.name, exc)
         return MockFeed(self._make_callbacks())
+
+    def _auto_candidates(self) -> list[FeedConnector]:
+        """Live adapters used as recovery candidates for explicit feed modes."""
+        callbacks = self._make_callbacks()
+        return [
+            BinanceFuturesFeed(callbacks), OkxSwapFeed(callbacks),
+            BybitLinearFeed(callbacks), BinanceSpotFeed(callbacks), BybitSpotFeed(callbacks),
+        ]
 
     # ------------------------------------------------------------------
     # Lifecycle
