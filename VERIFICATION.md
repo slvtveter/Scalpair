@@ -489,3 +489,17 @@ syntax/static-server checks did not establish functional or visual acceptance.
   invalid-input preservation and independent Spot/Futures workspace state.
 - An existing SQLite watchlist was upgraded twice without losing its stored
   symbol. Production rollout of this change remains to be verified.
+
+## Focus source switching
+
+- Focus source changes now replace the complete instrument identity
+  (`VENUE:MARKET:SYMBOL`) before requesting history, clear old-source candles,
+  walls, levels and drawing state, and invalidate in-flight pane requests.
+- A delayed server drawing response is ignored after switching instruments;
+  source-specific alerts and preference keys continue using the selected
+  identity.
+- Two regression tests cover selected-source request parameters, overlay
+  clearing and stale drawing responses. All 40 frontend tests pass.
+- Commit `1a6cd58` is pushed to `main`; Render backend health after the push
+  remains HTTP 200 with an active Bybit feed and 124,891 ingested messages at
+  verification time. Frontend rollout still needs its static deploy check.
