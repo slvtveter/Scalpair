@@ -317,8 +317,11 @@ syntax/static-server checks did not establish functional or visual acceptance.
   old events remain readable. The alert engine keeps the source binding for
   legacy symbol-only rules by resolving the active venue at trigger time.
 - Python/JavaScript syntax, 36 frontend tests and whitespace checks pass;
-  Docker startup smoke verifies the schema migration path. Production
-  verification is pending.
+  Docker startup smoke verifies the schema migration path.
+- After Render deployment `55ef45b`, backend health returned HTTP 200 with an
+  active Bybit feed and the service started cleanly against its persistent
+  database. A full authenticated notification event remains dependent on a
+  real user-triggered alert.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
