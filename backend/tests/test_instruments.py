@@ -1,6 +1,8 @@
 import pytest
 
 from app.instruments import market_for_feed, venue_for_feed
+from app.feeds.binance import BinanceSpotFeed
+from app.feeds.bybit import BybitSpotFeed
 
 
 @pytest.mark.parametrize('name,expected', [
@@ -19,3 +21,8 @@ def test_source_label_does_not_invent_an_exchange(name, expected):
 ])
 def test_market_label_matches_feed(name, expected):
     assert market_for_feed(name) == expected
+
+
+def test_spot_adapters_have_distinct_market_identity():
+    assert (BinanceSpotFeed.name, BinanceSpotFeed.market) == ("binance_spot", "SPOT")
+    assert (BybitSpotFeed.name, BybitSpotFeed.market) == ("bybit_spot", "SPOT")
