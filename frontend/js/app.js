@@ -380,6 +380,7 @@ function isStale(r) { return !S.connected || !r.bookTs || Date.now() - r.bookTs 
 // ------------------------- sorting / filtering -------------------------
 const FILTER_FIELDS = [
   { key: "vol24h", ru: "Объём 24ч · млн USDT", en: "24h volume · M USDT", scale: 1e6, nonnegative: true },
+  { key: "marketCapUsd", ru: "Капитализация · млн USD", en: "Market cap · M USD", scale: 1e6, nonnegative: true },
   { key: "natr", ru: "NATR(14) · 1м · %", en: "NATR(14) · 1m · %", scale: 1, nonnegative: true },
   { key: "change5m", ru: "Изменение · 5м · %", en: "Change · 5m · %", scale: 1 },
   { key: "speed", ru: "Скорость · 60с · %/мин", en: "Speed · 60s · %/min", scale: 1 },
@@ -469,7 +470,7 @@ $("sort-direction").addEventListener("click", () => {
 
 function compareRows(a, b) {
   const key = S.sortKey === "levelDist" ? "levelDist" :
-    ["surge", "vol1m", "vol24h", "natr", "range5m", "speed", "change5m"].includes(S.sortKey) ? S.sortKey : "score";
+    ["surge", "vol1m", "vol24h", "marketCapUsd", "natr", "range5m", "speed", "change5m"].includes(S.sortKey) ? S.sortKey : "score";
   const av = a[key], bv = b[key];
   // Missing metrics always come last, including when both are missing.
   const validA = Number.isFinite(av), validB = Number.isFinite(bv);
@@ -886,6 +887,7 @@ function renderCoinList() {
         <span class="${cls(r.change5m)}">${fmtPct(r.change5m, 1)}</span>
         <span class="${cls(r.surge - 1)}">${r.surge != null ? `${r.surge.toFixed(1)}x` : ""}</span>
         <span class="dim">${fmtUsd(r.vol1m)}</span>
+        <span class="dim" title="${r.marketCapSource ? `Market cap · ${esc(r.marketCapSource)}` : "Market cap unavailable"}">MC ${fmtUsd(r.marketCapUsd)}</span>
         <span class="cr-imb"><span class="imb-meter"><span class="imb-fill ${imb >= 0 ? "bid" : "ask"}" style="width:${imbW}%"></span></span>${levelTxt}</span>
       </div>
     </div>`;
@@ -1829,7 +1831,7 @@ function applyI18n() {
   const sortSel = $("sort-by");
   const sortPrev = sortSel.value;
   const sortDefs = [["score", "Скоринг", "Score"], ["surge", "Всплеск", "Surge"], ["vol1m", "Объём 1м", "1m Volume"],
-                    ["vol24h", "Объём 24ч · USDT", "24h volume · USDT"], ["natr", "NATR(14) · 1м · %", "NATR(14) · 1m · %"], ["range5m", "Range · 5м · %", "Range · 5m · %"], ["speed", "Скорость · %/мин", "Speed · %/min"], ["change5m", "5м %", "5m %"], ["levelDist", "До уровня", "To level"]];
+                    ["vol24h", "Объём 24ч · USDT", "24h volume · USDT"], ["marketCapUsd", "Капитализация", "Market cap"], ["natr", "NATR(14) · 1м · %", "NATR(14) · 1m · %"], ["range5m", "Range · 5м · %", "Range · 5m · %"], ["speed", "Скорость · %/мин", "Speed · %/min"], ["change5m", "5м %", "5m %"], ["levelDist", "До уровня", "To level"]];
   sortSel.innerHTML = sortDefs.map(([v, ru, en]) => `<option value="${v}">${S.lang === "ru" ? ru : en}</option>`).join("");
   sortSel.value = sortPrev;
   document.querySelectorAll(".side-tab").forEach(button => {

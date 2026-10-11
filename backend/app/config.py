@@ -15,6 +15,11 @@ class Settings(BaseSettings):
     data_feed: Literal["auto", "binance", "bybit", "okx", "mock"] = "auto"
     top_symbols: int = 50
 
+    # --- Market-cap enrichment (CoinGecko public API, best effort) ---
+    market_cap_enabled: bool = True
+    market_cap_url: str = "https://api.coingecko.com/api/v3/coins/markets"
+    market_cap_refresh_s: float = 600.0
+
     # --- Server ---
     api_host: str = "0.0.0.0"
     api_port: int = 8000

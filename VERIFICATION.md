@@ -217,6 +217,18 @@ syntax/static-server checks did not establish functional or visual acceptance.
 
 - Focus range sync maps the origin pane's left timestamp into each visible pane when enabled; it remains off by default and leaves panes independent otherwise.
 
+## Market-cap enrichment (local verification)
+
+- Added an isolated CoinGecko market-cap refresher with a ten-minute cache,
+  explicit provider and update timestamp, and best-effort failure handling.
+- Snapshot, `/markets/symbols` and `/instruments` expose `asset_id`,
+  `market_cap_usd`, source and update time. The frontend can filter/sort by
+  market cap and keeps `N/A` values at the end.
+- Docker smoke run with the mock feed returned a live BTC market cap with
+  `marketCapSource=coingecko`; Python compilation, `git diff --check` and all
+  35 frontend tests passed. Production deployment verification is still
+  pending for this change.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 

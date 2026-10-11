@@ -66,6 +66,12 @@ class SymbolState:
     quote_volume_24h: float = 0.0
     funding_rate: float = 0.0
     open_interest_usd: float = 0.0
+    # Asset-level enrichment. These are deliberately separate from contract
+    # volume/price and remain None when the provider has no trustworthy match.
+    asset_id: str | None = None
+    market_cap_usd: float | None = None
+    market_cap_source: str | None = None
+    market_cap_updated_at: float | None = None
 
     # --- rolling series ---
     price_history: deque = field(default_factory=lambda: deque(maxlen=PRICE_HISTORY_KEEP_S))

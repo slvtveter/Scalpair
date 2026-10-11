@@ -10,7 +10,7 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `GET /metrics` | Prometheus-compatible ingest/feed counters |
 | `GET /instruments?q=&exchange=&market=` | unified instrument catalog for search |
 | `GET /meta` | product info + safety statement |
-| `GET /screeners/overview` | full scanner rows (price, 5m%, NATR, speed, surge, walls, level distance, score, tag, walls[]) |
+| `GET /screeners/overview` | full scanner rows (price, 5m%, NATR, speed, surge, market cap, walls, level distance, score, tag) |
 | `GET /screeners/densities?limit=` | all walls sorted by notional desc |
 | `GET /screeners/ai-picks?top=&min_score=` | top setups + thesis |
 | `GET /screeners/score-alerts` | recent auto score≥85 alerts |
@@ -41,5 +41,13 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `DELETE /telegram/link` | unlink |
 
 ## Semantics
+
+Scanner rows and instrument catalog entries expose `market_cap_usd`,
+`market_cap_source` and `market_cap_updated_at` when the configured public
+market-cap provider has a match. Missing values are `null`; they are never
+derived from futures price or volume. The default provider is CoinGecko and
+refreshes on a ten-minute interval; set `MARKET_CAP_ENABLED=false` to disable
+the optional enrichment.
+
 - Crossing rules fire on the **edge** through the threshold (not while beyond it); `cooldown_s` re-arm (min 30s enforced); `recurring=false` disables after first fire; each fire gets a unique `event_id` recorded in `alert_events` (restart-safe audit).
 - Alerts are evaluated **server-side every 2s** — they fire with the browser closed.

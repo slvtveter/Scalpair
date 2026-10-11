@@ -19,6 +19,7 @@ from typing import Any
 from app import analytics
 from app.history import HistoryCache
 from app.instruments import venue_for_feed
+from app.market_cap import MarketCapService
 from app.config import Settings
 from app.feeds.base import FeedCallbacks, FeedConnector
 from app.feeds.binance import BinanceFuturesFeed
@@ -66,6 +67,11 @@ class MarketStreamer:
         self._seeded_symbols: set[str] = set()
         self._backfill_lock = asyncio.Lock()
         self._failover_lock = asyncio.Lock()
+        self.market_caps = MarketCapService(
+            settings.market_cap_url,
+            settings.market_cap_refresh_s,
+            settings.market_cap_enabled,
+        )
 
     # ------------------------------------------------------------------
     # Callbacks (feed → state)
@@ -169,6 +175,7 @@ class MarketStreamer:
             asyncio.create_task(self._candle_backfill_task(), name="candle-backfill"),
             asyncio.create_task(self._levels_loop(), name="levels-loop"),
             asyncio.create_task(self._live_recovery_loop(), name="live-recovery"),
+            asyncio.create_task(self.market_caps.run(lambda: self.top_symbols), name="market-cap-refresh"),
         ]
 
     async def _candle_backfill_task(self) -> None:
@@ -352,6 +359,7 @@ class MarketStreamer:
     async def stop(self) -> None:
         self._stop.set()
         await self.history.close()
+        await self.market_caps.close()
         if self.feed:
             self.feed.stop()
         for f in self.extra_feeds:
@@ -527,6 +535,12 @@ class MarketStreamer:
             st = self.state.symbols.get(sym)
             if st is None:
                 continue
+            cap = self.market_caps.records.get(self.market_caps._key(sym))
+            if cap:
+                st.asset_id = cap.asset_id
+                st.market_cap_usd = cap.market_cap_usd
+                st.market_cap_source = cap.source
+                st.market_cap_updated_at = cap.updated_at
             m = st.metrics
             pick = self.scorer.picks.get(sym)
             walls = sorted(st.walls.values(), key=lambda w: w["notional_usd"], reverse=True)[:5]
@@ -541,6 +555,10 @@ class MarketStreamer:
                     "change24h": m.price_change_24h_pct,
                     "vol1m": m.volume_1m_usd,
                     "vol24h": st.quote_volume_24h,
+                    "assetId": st.asset_id,
+                    "marketCapUsd": st.market_cap_usd,
+                    "marketCapSource": st.market_cap_source,
+                    "marketCapUpdatedAt": st.market_cap_updated_at,
                     "vol5m": m.volume_5m_usd,
                     "surge": m.volume_surge_ratio,
                     "imbalance": m.book_imbalance,

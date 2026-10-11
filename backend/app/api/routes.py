@@ -184,6 +184,10 @@ async def symbols(request: Request) -> JSONResponse:
                     "instrument_id": f"{venue}:FUTURES:{s}",
                     "price": request.app.state.market_state.symbols[s].price,
                     "quote_volume_24h": request.app.state.market_state.symbols[s].quote_volume_24h,
+                    "asset_id": request.app.state.market_state.symbols[s].asset_id,
+                    "market_cap_usd": request.app.state.market_state.symbols[s].market_cap_usd,
+                    "market_cap_source": request.app.state.market_state.symbols[s].market_cap_source,
+                    "market_cap_updated_at": request.app.state.market_state.symbols[s].market_cap_updated_at,
                     "venue": venue,
                     "market": "FUTURES",
                 }
@@ -229,6 +233,10 @@ async def instruments(
                 "quote": "USDT",
                 "price": st.price,
                 "quote_volume_24h": st.quote_volume_24h,
+                "asset_id": st.asset_id,
+                "market_cap_usd": st.market_cap_usd,
+                "market_cap_source": st.market_cap_source,
+                "market_cap_updated_at": st.market_cap_updated_at,
             }
         )
     return JSONResponse({"feed": request.app.state.market_state.feed_mode, "instruments": rows})
