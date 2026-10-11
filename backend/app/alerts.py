@@ -19,7 +19,7 @@ import aiohttp
 from sqlalchemy import select
 
 from app.config import Settings
-from app.db import AlertEvent, AlertRule, NotificationDelivery, TelegramLink, get_session_factory
+from app.db import AlertEvent, AlertRule, NotificationDelivery, TelegramLink, UserPreference, get_session_factory
 from app.state import MarketState
 from app.instruments import venue_for_feed
 
@@ -74,6 +74,7 @@ class AlertEngine:
         async with factory() as sess:
             rules = (await sess.execute(select(AlertRule).where(AlertRule.enabled.is_(True)))).scalars().all()
             now_s = time.time()
+            dnd_by_user: dict[int, bool] = {}
             for rule in rules:
                 if not self._rule_matches_instrument(rule):
                     continue
@@ -108,9 +109,23 @@ class AlertEngine:
                 event_row = (
                     await sess.execute(select(AlertEvent).where(AlertEvent.event_id == event_id))
                 ).scalar_one()
-                sess.add(NotificationDelivery(event_db_id=event_row.id, channel="in_app"))
-                if await self._user_has_telegram(sess, rule.user_id):
-                    sess.add(NotificationDelivery(event_db_id=event_row.id, channel="telegram"))
+                muted = dnd_by_user.get(rule.user_id)
+                if muted is None:
+                    muted = await self._user_dnd_active(sess, rule.user_id, now_s)
+                    dnd_by_user[rule.user_id] = muted
+                if muted:
+                    # Keep the event auditable while making the user's DND
+                    # choice visible to the inbox and suppressing all sends.
+                    sess.add(NotificationDelivery(
+                        event_db_id=event_row.id,
+                        channel="in_app",
+                        status="muted",
+                        last_error="user DND active",
+                    ))
+                else:
+                    sess.add(NotificationDelivery(event_db_id=event_row.id, channel="in_app"))
+                    if await self._user_has_telegram(sess, rule.user_id):
+                        sess.add(NotificationDelivery(event_db_id=event_row.id, channel="telegram"))
                 if rule.rule_type in ("cascade_distance", "density_appeared"):
                     rule.last_value = 1.0
                 else:
@@ -193,6 +208,16 @@ class AlertEngine:
             await sess.execute(select(TelegramLink).where(TelegramLink.user_id == user_id))
         ).scalar_one_or_none()
         return bool(link and link.chat_id)
+
+    async def _user_dnd_active(self, sess, user_id: int, now_s: float) -> bool:
+        row = await sess.scalar(select(UserPreference).where(UserPreference.user_id == user_id))
+        if not row or not isinstance(row.payload, dict):
+            return False
+        try:
+            until = float(row.payload.get("dndUntil") or 0)
+        except (TypeError, ValueError):
+            return False
+        return until > now_s
 
     # ------------------------------------------------------------------
     # Delivery

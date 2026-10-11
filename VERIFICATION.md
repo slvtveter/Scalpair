@@ -232,6 +232,16 @@ syntax/static-server checks did not establish functional or visual acceptance.
   `market_cap_updated_at` with HTTP 200; `/api/v1/health` was HTTP 200 with
   an active Bybit feed.
 
+## Server-side DND for alerts (local verification)
+
+- Added authenticated `dndUntil` workspace preference and a settings control
+  for 1 hour, 8 hours or 24 hours.
+- Alert evaluation preserves the `AlertEvent` audit row while recording an
+  explicit `in_app:muted` delivery and suppressing Telegram sends during DND.
+- Docker auth smoke test persisted and returned `dndUntil` through
+  `GET/PUT /api/v1/preferences`; frontend syntax/tests and whitespace checks
+  pass. Production verification is pending deployment of this change.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 

@@ -25,7 +25,7 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `POST /auth/login` | → `{access_token, subscription_tier}` (JWT HS256) |
 | `GET /auth/me` | Bearer required |
 | `GET /preferences` | authenticated workspace settings and layout |
-| `PUT /preferences` | authenticated workspace settings (groups, hidden, order, filters, layout, sound) |
+| `PUT /preferences` | authenticated workspace settings (groups, hidden, order, filters, layout, sound, `dndUntil` Unix seconds) |
 | `GET /watchlists` | authenticated favorite symbols |
 | `PUT /watchlists` | replace authenticated favorite symbols |
 
@@ -50,4 +50,5 @@ refreshes on a ten-minute interval; set `MARKET_CAP_ENABLED=false` to disable
 the optional enrichment.
 
 - Crossing rules fire on the **edge** through the threshold (not while beyond it); `cooldown_s` re-arm (min 30s enforced); `recurring=false` disables after first fire; each fire gets a unique `event_id` recorded in `alert_events` (restart-safe audit).
+- When authenticated `dndUntil` is in the future, alert events are still recorded but delivery is stored as `in_app:muted`; Telegram and in-app sends are suppressed until that timestamp.
 - Alerts are evaluated **server-side every 2s** — they fire with the browser closed.

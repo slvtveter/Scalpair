@@ -23,7 +23,7 @@ const STALE_BOOK_MS = 15000;
 const I18N = {
   ru: {
     coins: "Монеты", alerts: "Алерты", alertsBtn: "♧",
-    feed: "Источник", soundLabel: "Звук", langLabel: "Язык", minScoreLabel: "Минимальный скоринг", minWallLabel: "Мин. плотность",
+    feed: "Источник", soundLabel: "Звук", langLabel: "Язык", dndLabel: "Не беспокоить", minScoreLabel: "Минимальный скоринг", minWallLabel: "Мин. плотность",
     ticker: "Тикер", price: "Цена", ch5m: "5м %", surge: "Вспл", vol: "Объём", score: "Скор",
     waiting: "ожидание данных…", noMatch: "нет монет под фильтр", warmup: "движок считает…",
     notifEmpty: "уведомлений нет", signIn: "Войти", signUp: "Регистрация",
@@ -40,7 +40,7 @@ const I18N = {
   },
   en: {
     coins: "Coins", alerts: "Alerts", alertsBtn: "♧",
-    feed: "Feed", soundLabel: "Sound", langLabel: "Language", minScoreLabel: "Minimum score", minWallLabel: "Minimum wall",
+    feed: "Feed", soundLabel: "Sound", langLabel: "Language", dndLabel: "Do not disturb", minScoreLabel: "Minimum score", minWallLabel: "Minimum wall",
     ticker: "Ticker", price: "Price", ch5m: "5m %", surge: "Surge", vol: "Volume", score: "Score",
     waiting: "waiting for market data…", noMatch: "no symbols match filter", warmup: "scoring engine warming up…",
     notifEmpty: "no notifications yet", signIn: "Sign in", signUp: "Register",
@@ -76,7 +76,8 @@ const S = {
   feed: "—",
   priceHistory: new Map(),
   maxHistory: 900,
-  soundOn: LS.get("sound", false),
+    soundOn: LS.get("sound", false),
+  dndUntil: Number(LS.get("dndUntil", 0)) || 0,
   minScore: LS.get("minScore", 0),
   wallMin: LS.get("wallMin", 250000),
   sortKey: LS.get("sort", "score"),
@@ -1127,6 +1128,7 @@ function preferencePayload() {
     showLevels: S.showLevels,
     showWalls: S.showWalls,
     sound: S.soundOn,
+    dndUntil: S.dndUntil,
   };
 }
 
@@ -1151,9 +1153,18 @@ async function syncPreferences() {
     if (typeof p.showLevels === "boolean") S.showLevels = p.showLevels;
     if (typeof p.showWalls === "boolean") S.showWalls = p.showWalls;
     if (typeof p.sound === "boolean") S.soundOn = p.sound;
-    for (const [key, value] of Object.entries({groups:S.groups, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls, sound:S.soundOn})) LS.set(key, value);
+    if (Number.isFinite(Number(p.dndUntil))) S.dndUntil = Number(p.dndUntil);
+    for (const [key, value] of Object.entries({groups:S.groups, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls, sound:S.soundOn, dndUntil:S.dndUntil})) LS.set(key, value);
+    syncDndSelect();
     renderGroups(); renderMarketFilters(); updateSortControl(); renderBoard(); renderCoinList();
   } catch {}
+}
+
+function syncDndSelect() {
+  const select = $("dnd-select");
+  if (!select) return;
+  const remaining = Math.max(0, S.dndUntil - Date.now() / 1000);
+  select.value = remaining > 20 * 3600 ? "86400" : remaining > 4 * 3600 ? "28800" : remaining > 1200 ? "3600" : "0";
 }
 
 async function persistPreferences() {
@@ -1217,6 +1228,12 @@ $("sound-toggle").addEventListener("click", (e) => {
   persistPreferences();
   e.target.textContent = S.soundOn ? t("soundOn") : t("soundOff");
   if (S.soundOn) ping();
+});
+$("dnd-select").addEventListener("change", (e) => {
+  const seconds = Number(e.target.value) || 0;
+  S.dndUntil = seconds ? Math.floor(Date.now() / 1000) + seconds : 0;
+  LS.set("dndUntil", S.dndUntil);
+  persistPreferences();
 });
 $("lang-toggle").addEventListener("click", (e) => {
   S.lang = S.lang === "ru" ? "en" : "ru";
@@ -1810,7 +1827,7 @@ setInterval(() => {
 // ------------------------- i18n -------------------------
 function applyI18n() {
   document.documentElement.lang = S.lang;
-  const setMap = { "set-feed-label": "feed", "set-sound-label": "soundLabel", "set-lang-label": "langLabel",
+  const setMap = { "set-feed-label": "feed", "set-sound-label": "soundLabel", "set-lang-label": "langLabel", "set-dnd-label": "dndLabel",
                    "set-score-label": "minScoreLabel", "set-wall-label": "minWallLabel" };
   for (const [id, key] of Object.entries(setMap)) {
     const el = $(id);
@@ -1820,6 +1837,13 @@ function applyI18n() {
   $("search").placeholder = t("searchPh");
   $("chart-close").textContent = t("close");
   $("sound-toggle").textContent = S.soundOn ? t("soundOn") : t("soundOff");
+  const dnd = $("dnd-select");
+  if (dnd) {
+    dnd.innerHTML = S.lang === "ru"
+      ? '<option value="0">Выкл</option><option value="3600">1 час</option><option value="28800">8 часов</option><option value="86400">24 часа</option>'
+      : '<option value="0">Off</option><option value="3600">1 hour</option><option value="28800">8 hours</option><option value="86400">24 hours</option>';
+    syncDndSelect();
+  }
   $("alert-create").textContent = t("createAlert");
   $("alert-threshold").placeholder = S.lang === "ru" ? "порог" : "threshold";
   const typeSel = $("alert-type");

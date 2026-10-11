@@ -48,7 +48,7 @@ async def get_preferences(user: AUTHORIZED) -> dict[str, Any]:
 async def put_preferences(body: PreferencesIn, user: AUTHORIZED) -> dict[str, Any]:
     _require_user(user)
     # Keep this endpoint a workspace store rather than an arbitrary JSON sink.
-    allowed = {"groups", "hidden", "order", "filters", "filterPresets", "grid", "sort", "sortAscending", "autoSort", "boardTf", "showLevels", "showWalls", "sound"}
+    allowed = {"groups", "hidden", "order", "filters", "filterPresets", "grid", "sort", "sortAscending", "autoSort", "boardTf", "showLevels", "showWalls", "sound", "dndUntil"}
     payload = {key: value for key, value in body.preferences.items() if key in allowed}
     factory = get_session_factory(get_settings().database_url)
     async with factory() as sess:
