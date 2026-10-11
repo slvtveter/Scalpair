@@ -107,6 +107,7 @@ async def health(request: Request) -> HealthReport:
         last_message_age_ms=round(last_age) if last_age is not None else None,
         redis_connected=broadcaster.redis_connected,
         feed_mode=state.feed_mode,
+        configured_feed=get_settings().data_feed,
         feed_stats=feed_stats,
     )
 

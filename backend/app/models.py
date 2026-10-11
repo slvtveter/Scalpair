@@ -82,6 +82,7 @@ class HealthReport(BaseModel):
     last_message_age_ms: float | None = None
     redis_connected: bool
     feed_mode: str
+    configured_feed: str = "auto"
     feed_stats: dict[str, Any] = Field(default_factory=dict)
 
 
