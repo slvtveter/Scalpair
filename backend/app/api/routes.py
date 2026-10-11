@@ -68,7 +68,8 @@ async def health(request: Request) -> HealthReport:
     feed_stats = {}
     if streamer and streamer.feed:
         stats = streamer.feed.stats
-        feed_stats = {"connects": stats.connects, "reconnects": stats.reconnects, "messages": stats.messages, "errors": stats.errors}
+        feed_stats = {"connects": stats.connects, "reconnects": stats.reconnects, "messages": stats.messages,
+                      "errors": stats.errors, "last_error": stats.last_error}
     uptime = time.time() - START_TIME
     # A connector can pass the universe probe and still fail to ingest WS
     # events. After a short warmup that state is degraded, never healthy.

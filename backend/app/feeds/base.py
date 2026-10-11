@@ -55,6 +55,7 @@ class FeedStats:
     last_message_at: float = 0.0
     messages: int = 0
     errors: int = 0
+    last_error: str = ""
 
 
 class FeedConnector:
@@ -136,6 +137,7 @@ class FeedConnector:
                 raise
             except Exception as exc:  # noqa: BLE001 — feeds must never crash the loop
                 self.stats.errors += 1
+                self.stats.last_error = f"{type(exc).__name__}: {exc}"[:240]
                 attempt += 1
                 delay = min(self.backoff_max, self.backoff_base ** min(attempt, 8) + random.uniform(0, 1))
                 log.warning("[%s] %s — reconnecting in %.1fs (attempt %d)", self.name, exc, delay, attempt)
