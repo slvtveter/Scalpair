@@ -46,6 +46,17 @@ def _tracked_count(streamer: Any) -> int:
     return len(streamer.top_symbols)
 
 
+def _source_views(streamer: Any, fallback_state: Any) -> list[tuple[str, Any, list[str]]]:
+    """Return (feed name, isolated state, symbols) for API serialization."""
+    if getattr(streamer, "multi_mode", False) and streamer.source_states:
+        return [
+            (name, state, streamer.source_symbols.get(name, []))
+            for name, state in streamer.source_states.items()
+        ]
+    name = streamer.feed.name if streamer.feed else fallback_state.feed_mode
+    return [(name, fallback_state, streamer.top_symbols)]
+
+
 async def _noop_feed_callback(*args: Any) -> None:
     return None
 
@@ -147,34 +158,34 @@ async def densities(request: Request, limit: int = Query(50, ge=1, le=200)) -> J
     """All active density walls across tracked markets, biggest first."""
     state = request.app.state.market_state
     streamer = request.app.state.streamer
-    feed_name = streamer.feed.name if streamer.feed else ""
-    venue = venue_for_feed(feed_name)
     walls = []
-    for sym in streamer.top_symbols:
-        st = state.symbols.get(sym)
-        if not st:
-            continue
-        for w in st.walls.values():
-            walls.append(
-                {
-                    "symbol": sym,
-                    "venue": venue,
-                    "market": market_for_feed(feed_name),
-                    "side": w["side"],
-                    "price": w["price"],
-                    "notional_usd": w["notional_usd"],
-                    "qty": w["qty"],
-                    "distance_pct": w["distance_pct"],
-                    "seconds_to_eat": w.get("seconds_to_eat"),
-                    "detected_at": w["detected_at"],
-                    "age_s": w.get("age_s", 0.0),
-                    "book_ts": st.book_ts_ms,
-                    "brp_usd": st.density_brp_usd,
-                    "category": w.get("category"),
-                    "levels_bid": st.density_bid_levels,
-                    "levels_ask": st.density_ask_levels,
-                }
-            )
+    for feed_name, source_state, source_symbols in _source_views(streamer, state):
+        venue = venue_for_feed(feed_name)
+        for sym in source_symbols:
+            st = source_state.symbols.get(sym)
+            if not st:
+                continue
+            for w in st.walls.values():
+                walls.append(
+                    {
+                        "symbol": sym,
+                        "venue": venue,
+                        "market": market_for_feed(feed_name),
+                        "side": w["side"],
+                        "price": w["price"],
+                        "notional_usd": w["notional_usd"],
+                        "qty": w["qty"],
+                        "distance_pct": w["distance_pct"],
+                        "seconds_to_eat": w.get("seconds_to_eat"),
+                        "detected_at": w["detected_at"],
+                        "age_s": w.get("age_s", 0.0),
+                        "book_ts": st.book_ts_ms,
+                        "brp_usd": st.density_brp_usd,
+                        "category": w.get("category"),
+                        "levels_bid": st.density_bid_levels,
+                        "levels_ask": st.density_ask_levels,
+                    }
+                )
     walls.sort(key=lambda w: w["notional_usd"], reverse=True)
     return JSONResponse({
         "ts": int(time.time() * 1000),
@@ -232,27 +243,30 @@ async def recent_alerts(request: Request) -> JSONResponse:
 @router.get("/markets/symbols")
 async def symbols(request: Request) -> JSONResponse:
     streamer = request.app.state.streamer
-    feed_name = streamer.feed.name if streamer.feed else ""
-    venue = venue_for_feed(feed_name)
-    market = market_for_feed(feed_name)
+    views = _source_views(streamer, request.app.state.market_state)
+    rows = []
+    for feed_name, source_state, source_symbols in views:
+        venue = venue_for_feed(feed_name)
+        market = market_for_feed(feed_name)
+        rows.extend(
+            {
+                "symbol": s,
+                "instrument_id": f"{venue}:{market}:{s}",
+                "price": source_state.symbols[s].price,
+                "quote_volume_24h": source_state.symbols[s].quote_volume_24h,
+                "asset_id": source_state.symbols[s].asset_id,
+                "market_cap_usd": source_state.symbols[s].market_cap_usd,
+                "market_cap_source": source_state.symbols[s].market_cap_source,
+                "market_cap_updated_at": source_state.symbols[s].market_cap_updated_at,
+                "venue": venue,
+                "market": market,
+            }
+            for s in source_symbols if s in source_state.symbols
+        )
     return JSONResponse(
         {
             "feed": request.app.state.market_state.feed_mode,
-            "symbols": [
-                {
-                    "symbol": s,
-                    "instrument_id": f"{venue}:{market}:{s}",
-                    "price": request.app.state.market_state.symbols[s].price,
-                    "quote_volume_24h": request.app.state.market_state.symbols[s].quote_volume_24h,
-                    "asset_id": request.app.state.market_state.symbols[s].asset_id,
-                    "market_cap_usd": request.app.state.market_state.symbols[s].market_cap_usd,
-                    "market_cap_source": request.app.state.market_state.symbols[s].market_cap_source,
-                    "market_cap_updated_at": request.app.state.market_state.symbols[s].market_cap_updated_at,
-                    "venue": venue,
-                    "market": market,
-                }
-                for s in streamer.top_symbols if s in request.app.state.market_state.symbols
-            ],
+            "symbols": rows,
         }
     )
 
