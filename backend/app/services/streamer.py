@@ -267,6 +267,7 @@ class MarketStreamer:
             asyncio.create_task(self._multi_metrics_loop(), name="multi-metrics-loop"),
             asyncio.create_task(self._scoring_loop(), name="multi-scoring-loop"),
             asyncio.create_task(self._multi_backfill_task(), name="multi-backfill"),
+            asyncio.create_task(self._levels_loop(), name="multi-levels-loop"),
             asyncio.create_task(self.market_caps.run(lambda: self.top_symbols), name="market-cap-refresh"),
         ]
         log.info("multi source runtime started: %s", ", ".join(self.source_states))
@@ -463,17 +464,24 @@ class MarketStreamer:
 
         while not self._stop.is_set():
             started = time.perf_counter()
-            for sym in self.top_symbols:
-                st = self.state.symbols.get(sym)
-                if st is None or len(st.candles) < 10:
-                    continue
-                try:
-                    closed = [c for c in st.candles if c.open_time + 60_000 <= time.time() * 1000]
-                    pivots = detect_pivots(closed, k=3)
-                    st.pivots = pivots
-                    st.cascades = build_cascades(closed, pivots, min_touches=3)
-                except Exception:  # noqa: BLE001 — analytics must not kill the loop
-                    log.exception("pivot detection failed for %s", sym)
+            sources = (
+                [(name, state, self.source_symbols.get(name, []))
+                 for name, state in self.source_states.items()]
+                if self.multi_mode else [(self.state.feed_mode, self.state, self.top_symbols)]
+            )
+            now_ms = time.time() * 1000
+            for name, source_state, symbols in sources:
+                for sym in symbols:
+                    st = source_state.symbols.get(sym)
+                    if st is None or len(st.candles) < 10:
+                        continue
+                    try:
+                        closed = [c for c in st.candles if c.open_time + 60_000 <= now_ms]
+                        pivots = detect_pivots(closed, k=3)
+                        st.pivots = pivots
+                        st.cascades = build_cascades(closed, pivots, min_touches=3)
+                    except Exception:  # noqa: BLE001 — isolate analytics failures by source
+                        log.exception("pivot detection failed for %s:%s", name, sym)
             self.publish(self.build_snapshot())
             await asyncio.sleep(max(1.0, self.LEVELS_INTERVAL_S - (time.perf_counter() - started)))
 

@@ -554,3 +554,15 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Production remains on its current feed configuration. Multi-source Render
   load and per-source live freshness still require validation before changing
   the deployment default.
+
+## Multi-source cascade calculation
+
+- Multi startup now launches the level engine, previously absent from its task
+  list. The shared loop calculates confirmed pivots/cascades using each
+  source's own tracked symbols and closed 1m candles, isolating failures per
+  source/instrument.
+- Regression test uses different BTC price histories on Bybit Futures and
+  Binance Spot, checks independent confirmed zones and level-distance metrics,
+  then verifies both source-labelled snapshot rows contain their own levels.
+- All 141 backend tests pass. This verifies local calculation and serialization;
+  Render's multi-source rollout and live scale acceptance remain outstanding.

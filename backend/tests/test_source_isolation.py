@@ -227,3 +227,43 @@ async def test_multi_health_reports_failed_secondary_source(monkeypatch):
     report = await routes.health(request)
     assert report.status == 'ok'
     assert report.messages_ingested == 2
+
+
+async def test_multi_levels_use_each_sources_own_closed_history():
+    import time
+    from app.levels import detect_pivots, build_cascades
+    from app import analytics
+
+    s = streamer()
+    s._activate_feed(Feed('bybit'), universe(100))
+    spot = MarketState()
+    spot.feed_mode = 'binance_spot'
+    s.multi_mode = True
+    s.source_states = {'bybit': s.state, 'binance_spot': spot}
+    s.source_symbols = {'bybit': ['BTCUSDT'], 'binance_spot': ['BTCUSDT']}
+    now = int(time.time() * 1000) // 60000 * 60000
+    expected = {}
+    for name, state in s.source_states.items():
+        base = 100 if name == 'bybit' else 200
+        st = state.get('BTCUSDT')
+        st.price = base
+        for i in range(41):
+            # Four independent matching highs/lows; the last bar is still open.
+            peak = i % 10 == 5
+            st.on_candle(now - (40-i)*60000, base,
+                         base + (5 if peak else 1), base - (5 if peak else 1), base, 1)
+        closed = list(st.candles)[:-1]
+        expected[name] = build_cascades(closed, detect_pivots(closed, k=3), min_touches=3)
+        assert expected[name]
+    s.publish = lambda _: s._stop.set()
+    s.LEVELS_INTERVAL_S = 0
+    await s._levels_loop()
+    for name, state in s.source_states.items():
+        st = state.get('BTCUSDT')
+        assert st.cascades == expected[name]
+        analytics.compute_metrics(state, st, now)
+        assert st.metrics.level_dist_pct is not None
+    rows = {row['venue']: row for row in s.build_snapshot()['symbols']}
+    assert rows['BY-F']['levels'] and rows['BI-S']['levels']
+    assert all(z['mid'] < 150 for z in rows['BY-F']['levels'])
+    assert all(z['mid'] > 150 for z in rows['BI-S']['levels'])
