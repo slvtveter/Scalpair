@@ -748,7 +748,7 @@ function renderBoard() {
           <span class="ts ${cls(r.surge - 1)}">${r.surge != null ? `${r.surge.toFixed(1)}x` : ""}</span>
           <span class="score-num ${scoreClass(r.score)}">${r.score != null ? r.score.toFixed(0) : "—"}</span>
         </div>
-        <div class="tile-sub mono"><span class="tp">${fmtPrice(r.price)}</span><span class="tile-volume dim">${fmtUsd(r.vol1m)}</span><span class="tag-cell ${tagClass(r.tag)}">${esc(r.tag ?? "")}</span></div>
+        <div class="tile-sub mono"><span class="tp">${fmtPrice(r.price)}</span><span class="tile-volume dim">${fmtUsd(r.vol1m)}</span><span class="tile-natr dim">NATR ${r.natr != null ? `${r.natr.toFixed(1)}%` : "—"}</span><span class="tag-cell ${tagClass(r.tag)}">${esc(r.tag ?? "")}</span></div>
         <div class="tile-canvas-wrap"><canvas></canvas></div>
       </div>`).join("");
   }
@@ -788,6 +788,7 @@ function updateTileMetrics(tile, r) {
   set(".ts", r.surge != null ? `${r.surge.toFixed(1)}x` : "—", `ts ${cls(r.surge - 1)}`);
   set(".score-num", r.score != null ? r.score.toFixed(0) : "—", `score-num ${scoreClass(r.score)}`);
   set(".tile-volume", fmtUsd(r.vol1m));
+  set(".tile-natr", `NATR ${r.natr != null ? `${r.natr.toFixed(1)}%` : "—"}`);
   set(".tag-cell", r.tag || "", `tag-cell ${tagClass(r.tag)}`);
   set(".tile-venue", r.venue || r.exchange || "—");
   set(".star", S.watch.has(r.symbol) ? "★" : "☆", `star ${S.watch.has(r.symbol) ? "on" : ""}`);
