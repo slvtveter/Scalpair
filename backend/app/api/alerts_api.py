@@ -50,7 +50,7 @@ async def put_preferences(body: PreferencesIn, user: AUTHORIZED) -> dict[str, An
     _require_user(user)
     # Keep this endpoint a workspace store rather than an arbitrary JSON sink.
     allowed = {
-        "groups", "hidden", "order", "filters", "filterPresets", "grid", "sort",
+        "groups", "hidden", "order", "filters", "filterPresets", "grid", "densityDepth", "sort",
         "sortAscending", "autoSort", "boardTf", "showLevels", "showWalls", "sound",
         "dndUntil", "syncCrosshair", "syncRange", "paneOverlays", "focusLayout",
         "focusVenue",

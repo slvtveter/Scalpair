@@ -618,3 +618,10 @@ syntax/static-server checks did not establish functional or visual acceptance.
   the user remains on the screener.
 - The implementation tolerates lightweight test/demo connectors without feed
   stats. Frontend suite: 43 tests; backend suite: 142 tests.
+
+## Persisted liquidity-map depth
+
+- Added `densityDepth` to the authenticated preferences allowlist. The selected
+  1/3/5/10% Liquidity Map range now survives login and workspace restoration;
+  the API regression test verifies the value is retained instead of silently
+  dropped.
