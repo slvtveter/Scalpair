@@ -335,6 +335,15 @@ syntax/static-server checks did not establish functional or visual acceptance.
   HTTP 200 with active Bybit data and the published `/en` includes the Focus
   source selector; database migration completed during startup.
 
+## Density map visual metadata
+
+- The sidebar now shows a compact Small/Medium/Large legend and live L2
+  coverage text (`top N/side`, limited depth) sourced from the API response.
+  Density pills retain their category styling, matching the reference map's
+  visual hierarchy without implying unsupported full-book coverage.
+- Frontend syntax, 36 tests and whitespace checks pass; production deployment
+  is pending for this visual update.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 

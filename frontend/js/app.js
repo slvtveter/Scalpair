@@ -563,6 +563,11 @@ async function refreshDensityMap() {
       w.book_ts && Date.now() - w.book_ts <= STALE_BOOK_MS);
     grid.querySelectorAll(".density-pill").forEach((el) => el.remove());
     $("density-mid").textContent = "0% · от mid каждого инструмента";
+    const coverage = body.coverage || {};
+    const coverageEl = $("density-coverage");
+    if (coverageEl) coverageEl.textContent = coverage.max_levels_per_side
+      ? `L2: top ${coverage.max_levels_per_side}/side · ${coverage.complete_percent_range ? "full range" : "limited depth"}`
+      : "L2: coverage pending";
     badge.textContent = body.feed === "mock" ? "DEMO · synthetic" : walls.length ? `${walls.length} · top L2` : "Нет свежих плотностей";
     walls.slice(0, 12).forEach((wall, i) => {
       const pill = document.createElement("button");
