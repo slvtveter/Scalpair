@@ -55,8 +55,8 @@ export RENDER_KEY=rnd_...
 
 | Переменная | Значение |
 |---|---|
-| `DATA_FEED` | `auto` (binance futures → bybit futures → Binance spot → Bybit spot → okx → mock); explicit `binance_spot`/`bybit_spot` are supported. `multi` is available for isolated simultaneous feeds on a paid plan with sufficient upstream limits. |
-| `TOP_SYMBOLS` | 30 free / 50+ paid |
+| `DATA_FEED` | Blueprint default: `multi` (Binance/Bybit Futures and Spot + OKX Futures), with `auto` and explicit source modes also supported. |
+| `TOP_SYMBOLS` | 10 per source in the Blueprint baseline; raise only after checking upstream and instance budgets. |
 | `JWT_SECRET` | генерируется blueprint'ом |
 | `TELEGRAM_BOT_TOKEN` | опционально; без него алерты остаются in-app |
 

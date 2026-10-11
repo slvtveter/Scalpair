@@ -1,6 +1,6 @@
 # Scalpair — TEST PLAN
 
-## Автоматические (pytest, 85 тестов — `cd backend && ./.venv/bin/python -m pytest`)
+## Автоматические (pytest, 141 backend + 41 frontend тест — `cd backend && ./.venv/bin/pytest`)
 
 | Suite | Покрывает |
 |---|---|
@@ -24,4 +24,7 @@
 
 - Playwright smoke-набор (Screener → Board → Focus → Back) — в дорожной карте.
 - 100-переходов Focus ↔ Screener leak-тест — не автоматизирован (код-ревью: listeners/queues ограничены).
-- Нагрузка 200 символов / 16 графиков — после multi-venue.
+- Multi-source smoke: 50 source-specific instruments across five adapters at
+  `TOP_SYMBOLS=10`; per-source health and zero-error ingest verified locally.
+- Live Render remains on its dashboard `DATA_FEED=bybit` override until that
+  environment value is synchronized with the Blueprint's multi baseline.

@@ -46,6 +46,25 @@ This file records what is genuinely implemented versus what remains, per the spe
 
 ## Round 3 — product decision: minimal UI (owner directive, 2026-10-10)
 
+## Current verification correction (2026-10-11)
+
+The historical milestone tables above are retained as release history. Current
+state supersedes their old counts and remaining-item labels:
+
+- Backend has 141 tests and frontend has 41 tests; the browser scale check
+  covers 200 instruments, 16 canvases and 100 Focus round trips.
+- Binance Futures/Spot, Bybit Futures/Spot and OKX Futures adapters are
+  implemented, with opt-in isolated `DATA_FEED=multi` runtime and per-source
+  health diagnostics. The Render Blueprint baseline is now multi-source with
+  `TOP_SYMBOLS=10`, while the existing dashboard override still needs manual
+  synchronization.
+- Watchlists, groups, hidden instruments, drawings, native timeframes, source
+  identity guards, liquidity depth selection and server alerts are implemented;
+  the outstanding items are documented in `VERIFICATION.md`, including
+  PostgreSQL resource provisioning, Alembic migrations, Redis durable queue,
+  React/TypeScript migration, full-depth L2 coverage and real Telegram/live
+  multi-source Render acceptance.
+
 The owner simplified the surface deliberately; this overrides some spec UI details
 (documented, not accidental omissions):
 - Removed: ticker strip, topbar stats (symbols/ingest/msg-s), footer disclaimers, density
