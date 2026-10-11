@@ -88,6 +88,7 @@ const S = {
   boardTf: LS.get("boardTf", 5),
   showLevels: LS.get("showLevels", true),
   showWalls: LS.get("showWalls", true),
+  densityDepth: [1, 3, 5, 10].includes(Number(LS.get("densityDepth", 3))) ? Number(LS.get("densityDepth", 3)) : 3,
   gridSize: LS.get("grid", 3),
   page: 0,
   search: "",
@@ -583,7 +584,7 @@ async function refreshDensityMap() {
     const body = await res.json();
     if (epoch !== S.dataEpoch) return;
     const walls = (body.walls || []).filter((w) =>
-      Number.isFinite(w.distance_pct) && Math.abs(w.distance_pct) <= 3 &&
+      Number.isFinite(w.distance_pct) && Math.abs(w.distance_pct) <= S.densityDepth &&
       w.notional_usd >= S.wallMin && (S.venue === "ALL" || w.venue === S.venue) &&
       w.book_ts && Date.now() - w.book_ts <= STALE_BOOK_MS);
     grid.querySelectorAll(".density-pill").forEach((el) => el.remove());
@@ -597,11 +598,11 @@ async function refreshDensityMap() {
     walls.slice(0, 12).forEach((wall, i) => {
       const pill = document.createElement("button");
       pill.className = `density-pill dynamic ${wall.side === "bid" ? "bid" : "ask"} density-${wall.category || "unknown"}`;
-      pill.style.top = `${50 - wall.distance_pct / 3 * 45}%`;
+      pill.style.top = `${50 - wall.distance_pct / S.densityDepth * 45}%`;
       pill.style.left = `${(i % 2) * 47 + 2}%`;
       pill.textContent = `${wall.venue || "—"} ${wall.market || "FUTURES"} ${wall.symbol.replace(/USDT$/, "")} ${fmtUsd(wall.notional_usd)}`;
       pill.title = `${wall.symbol} · ${wall.venue || "—"} ${wall.market || "FUTURES"} · ${wall.side} · ${wall.category || "—"} · BRP ${fmtUsd(wall.brp_usd)} · ${fmtPrice(wall.price)} · ${wall.distance_pct.toFixed(2)}% · ${wall.levels_bid || 0}/${wall.levels_ask || 0} L2 levels`;
-      pill.onclick = () => openChart(wall.symbol);
+      pill.onclick = () => openChart(wall.symbol, wall.instrument_id || "");
       grid.appendChild(pill);
     });
   } catch {
@@ -1151,6 +1152,7 @@ async function persistWatchlist() {
 
 function preferencePayload() {
   return {
+    densityDepth: S.densityDepth,
     groups: S.groups,
     hidden: [...S.hidden],
     order: S.order,
@@ -1193,6 +1195,7 @@ async function syncPreferences() {
     if (Number.isFinite(Number(p.boardTf))) S.boardTf = Number(p.boardTf);
     if (typeof p.showLevels === "boolean") S.showLevels = p.showLevels;
     if (typeof p.showWalls === "boolean") S.showWalls = p.showWalls;
+    if ([1, 3, 5, 10].includes(Number(p.densityDepth))) S.densityDepth = Number(p.densityDepth);
     if (typeof p.sound === "boolean") S.soundOn = p.sound;
     if (Number.isFinite(Number(p.dndUntil))) S.dndUntil = Number(p.dndUntil);
     if (typeof p.syncCrosshair === "boolean") S.syncCrosshair = p.syncCrosshair;
@@ -1200,10 +1203,21 @@ async function syncPreferences() {
     if (p.paneOverlays && typeof p.paneOverlays === "object" && !Array.isArray(p.paneOverlays)) S.paneOverlays = p.paneOverlays;
     if ([1, 2, 4].includes(Number(p.focusLayout))) S.focusLayout = Number(p.focusLayout);
     if (typeof p.focusVenue === "string" && p.focusVenue.length <= 16) S.focusVenue = p.focusVenue;
-    for (const [key, value] of Object.entries({groups:S.groups, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls, sound:S.soundOn, dndUntil:S.dndUntil, syncCrosshair:S.syncCrosshair, syncRange:S.syncRange, paneOverlays:S.paneOverlays, focusLayout:S.focusLayout, focusVenue:S.focusVenue})) LS.set(key, value);
+    for (const [key, value] of Object.entries({groups:S.groups, hidden:[...S.hidden], order:S.order, filters:S.filters, filterPresets:S.presets, grid:S.gridSize, sort:S.sortKey, sortAscending:S.sortAscending, autoSort:S.autoSort, boardTf:S.boardTf, showLevels:S.showLevels, showWalls:S.showWalls, densityDepth:S.densityDepth, sound:S.soundOn, dndUntil:S.dndUntil, syncCrosshair:S.syncCrosshair, syncRange:S.syncRange, paneOverlays:S.paneOverlays, focusLayout:S.focusLayout, focusVenue:S.focusVenue})) LS.set(key, value);
     syncDndSelect();
     renderGroups(); renderMarketFilters(); updateSortControl(); renderBoard(); renderCoinList();
   } catch {}
+}
+
+const densityDepthSelect = $("density-depth");
+if (densityDepthSelect) {
+  densityDepthSelect.value = String(S.densityDepth);
+  densityDepthSelect.addEventListener("change", () => {
+    S.densityDepth = Number(densityDepthSelect.value);
+    LS.set("densityDepth", S.densityDepth);
+    persistPreferences();
+    refreshDensityMap();
+  });
 }
 
 function syncDndSelect() {

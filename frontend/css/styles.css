@@ -804,3 +804,5 @@ body{background:radial-gradient(ellipse at 50% -15%,#172027 0%,var(--bg) 52%);le
 #chart-modal:fullscreen { background: var(--bg); padding: 0; }
 #chart-modal:fullscreen .modal-box, #chart-modal.focus-fullscreen .modal-box { width:100vw; max-width:none; max-height:100vh; height:100vh; border-radius:0; }
 #chart-modal.focus-fullscreen { position:fixed; inset:0; z-index:100; background:var(--bg); }
+
+.density-depth-control{display:inline-flex;align-items:center;gap:5px;margin-left:8px;color:var(--text-3);font:9px var(--font-mono);vertical-align:middle}.density-depth-control .ctl{height:24px;padding:0 5px;font-size:10px}

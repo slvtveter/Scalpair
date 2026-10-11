@@ -97,6 +97,7 @@ class TestScreeners:
             assert w["side"] in ("bid", "ask")
             assert w["notional_usd"] > 0
             assert "distance_pct" in w
+            assert w["instrument_id"].endswith(f":{w['symbol']}")
             assert w["market"] in ("FUTURES", "SPOT")
 
     def test_ai_picks(self, client):

@@ -390,3 +390,11 @@ test('late server drawings cannot overwrite the next Focus instrument', async ()
   await pending;
   assert.deepEqual(writes, []);
 });
+
+test('density depth persists and source identity is used when opening a wall', () => {
+  const a = app();
+  a.run(`S.densityDepth=10; S.jwt=null; S.catalog=[]; S.symbols=[];`);
+  assert.equal(a.run('S.densityDepth'), 10);
+  assert.match(a.run('preferencePayload()').densityDepth.toString(), /^10$/);
+  assert.equal(a.run('typeof workspaceHas'), 'function');
+});

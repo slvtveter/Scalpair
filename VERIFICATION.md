@@ -580,3 +580,15 @@ syntax/static-server checks did not establish functional or visual acceptance.
   then verifies both source-labelled snapshot rows contain their own levels.
 - All 141 backend tests pass. This verifies local calculation and serialization;
   Render's multi-source rollout and live scale acceptance remain outstanding.
+
+## Liquidity-map depth and instrument navigation
+
+- Liquidity Map now offers selectable 1%, 3%, 5% and 10% distance windows,
+  persists the choice in workspace preferences and scales wall placement to
+  the selected window.
+- Density responses carry `instrument_id`; clicking a Spot/Futures wall opens
+  Focus for that exact source instead of resolving the ticker through the
+  active market.
+- The UI retains the explicit limited-depth coverage label, so a top-N book is
+  not presented as complete 10% market coverage. Backend and frontend suites
+  pass: 141 and 41 tests respectively.

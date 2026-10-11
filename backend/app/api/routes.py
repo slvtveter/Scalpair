@@ -186,6 +186,7 @@ async def densities(request: Request, limit: int = Query(50, ge=1, le=200)) -> J
                 walls.append(
                     {
                         "symbol": sym,
+                        "instrument_id": f"{venue}:{market_for_feed(feed_name)}:{sym}",
                         "venue": venue,
                         "market": market_for_feed(feed_name),
                         "side": w["side"],
