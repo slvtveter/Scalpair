@@ -18,13 +18,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
 from fastapi.responses import JSONResponse, PlainTextResponse
 
 from app.api.auth import User, current_user
-from app.instruments import venue_for_feed
+from app.instruments import market_for_feed, venue_for_feed
 from app.config import get_settings
 from app.models import HealthReport
 from app.history import TIMEFRAMES, aggregate_history, normalize_rows
 from app.feeds.base import FeedCallbacks
-from app.feeds.binance import BinanceFuturesFeed
-from app.feeds.bybit import BybitLinearFeed
+from app.feeds.binance import BinanceFuturesFeed, BinanceSpotFeed
+from app.feeds.bybit import BybitLinearFeed, BybitSpotFeed
 from app.feeds.okx import OkxSwapFeed
 from app.feeds.mock import MockFeed
 
@@ -46,7 +46,9 @@ def _history_source_for_venue(venue: str):
     callbacks = FeedCallbacks(_noop_feed_callback, _noop_feed_callback, _noop_feed_callback, _noop_feed_callback, _noop_feed_callback)
     return {
         "BI-F": BinanceFuturesFeed(callbacks),
+        "BI-S": BinanceSpotFeed(callbacks),
         "BY-F": BybitLinearFeed(callbacks),
+        "BY-S": BybitSpotFeed(callbacks),
         "OK-F": OkxSwapFeed(callbacks),
         "DEMO": MockFeed(callbacks),
     }.get(venue)
@@ -209,13 +211,14 @@ async def symbols(request: Request) -> JSONResponse:
     streamer = request.app.state.streamer
     feed_name = streamer.feed.name if streamer.feed else ""
     venue = venue_for_feed(feed_name)
+    market = market_for_feed(feed_name)
     return JSONResponse(
         {
             "feed": request.app.state.market_state.feed_mode,
             "symbols": [
                 {
                     "symbol": s,
-                    "instrument_id": f"{venue}:FUTURES:{s}",
+                    "instrument_id": f"{venue}:{market}:{s}",
                     "price": request.app.state.market_state.symbols[s].price,
                     "quote_volume_24h": request.app.state.market_state.symbols[s].quote_volume_24h,
                     "asset_id": request.app.state.market_state.symbols[s].asset_id,
@@ -223,7 +226,7 @@ async def symbols(request: Request) -> JSONResponse:
                     "market_cap_source": request.app.state.market_state.symbols[s].market_cap_source,
                     "market_cap_updated_at": request.app.state.market_state.symbols[s].market_cap_updated_at,
                     "venue": venue,
-                    "market": "FUTURES",
+                    "market": market,
                 }
                 for s in streamer.top_symbols if s in request.app.state.market_state.symbols
             ],
@@ -242,6 +245,7 @@ async def instruments(
     streamer = request.app.state.streamer
     feed_name = streamer.feed.name if streamer.feed else ""
     venue = venue_for_feed(feed_name)
+    active_market = market_for_feed(feed_name)
     query = q.strip().upper() if q else ""
     exchange_filter = exchange.strip().upper() if exchange else ""
     market_filter = market.strip().upper() if market else ""
@@ -254,16 +258,16 @@ async def instruments(
             continue
         if exchange_filter and exchange_filter not in venue:
             continue
-        if market_filter and market_filter != "FUTURES":
+        if market_filter and market_filter != active_market:
             continue
         rows.append(
             {
                 "asset_id": symbol.removesuffix("USDT").lower(),
                 "symbol": symbol,
-                "instrument_id": f"{venue}:FUTURES:{symbol}",
+                "instrument_id": f"{venue}:{active_market}:{symbol}",
                 "venue": venue,
                 "exchange": venue.split("-", 1)[0],
-                "market": "FUTURES",
+                "market": active_market,
                 "quote": "USDT",
                 "price": st.price,
                 "quote_volume_24h": st.quote_volume_24h,
@@ -292,18 +296,23 @@ async def candles(
     streamer = request.app.state.streamer
     feed, generation = streamer.feed, streamer._generation
     active_venue = venue_for_feed(feed.name if feed else "")
+    active_market = market_for_feed(feed.name if feed else "")
     venue = active_venue
-    expected_instrument = f"{venue}:FUTURES:{st.symbol}"
+    market = active_market
+    expected_instrument = f"{venue}:{market}:{st.symbol}"
     selected_feed = feed
     alternate_source = False
     if instrument_id and instrument_id != expected_instrument:
         pieces = instrument_id.split(":")
-        if len(pieces) != 3 or pieces[1] != "FUTURES" or pieces[2].upper() != st.symbol:
+        if len(pieces) != 3 or pieces[1] not in {"FUTURES", "SPOT"} or pieces[2].upper() != st.symbol:
             raise HTTPException(status.HTTP_409_CONFLICT, "Instrument source changed; retry with the active instrument")
         selected_feed = _history_source_for_venue(pieces[0])
         if selected_feed is None:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Unsupported history source")
+        if pieces[1] != market_for_feed(selected_feed.name):
+            raise HTTPException(status.HTTP_409_CONFLICT, "Instrument market does not match the selected source")
         venue = pieces[0]
+        market = pieces[1]
         alternate_source = True
     source = "stream"
     history = aggregate_history(list(st.candles), TIMEFRAMES[timeframe])[-limit:]
@@ -324,11 +333,11 @@ async def candles(
     return JSONResponse(
         {
             "symbol": st.symbol,
-            "instrument_id": f"{venue}:FUTURES:{st.symbol}",
+            "instrument_id": f"{venue}:{market}:{st.symbol}",
             "timeframe": timeframe,
             "feed": state.feed_mode,
             "venue": venue,
-            "market": "FUTURES",
+            "market": market,
             "sourceGeneration": generation,
             "historySource": source,
             "overlaysSource": "active_live_feed" if not alternate_source else "unavailable_for_selected_source",

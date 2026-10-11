@@ -18,12 +18,12 @@ from typing import Any
 
 from app import analytics
 from app.history import HistoryCache
-from app.instruments import venue_for_feed
+from app.instruments import market_for_feed, venue_for_feed
 from app.market_cap import MarketCapService
 from app.config import Settings
 from app.feeds.base import FeedCallbacks, FeedConnector
-from app.feeds.binance import BinanceFuturesFeed
-from app.feeds.bybit import BybitLinearFeed
+from app.feeds.binance import BinanceFuturesFeed, BinanceSpotFeed
+from app.feeds.bybit import BybitLinearFeed, BybitSpotFeed
 from app.feeds.okx import OkxSwapFeed
 from app.feeds.mock import MockFeed
 from app.ml_engine import ScalpScorer
@@ -129,13 +129,17 @@ class MarketStreamer:
         bybit = BybitLinearFeed(callbacks)
         if mode == "binance":
             return [binance]
+        if mode == "binance_spot":
+            return [BinanceSpotFeed(callbacks)]
         if mode == "bybit":
             return [bybit]
+        if mode == "bybit_spot":
+            return [BybitSpotFeed(callbacks)]
         if mode == "okx":
             return [OkxSwapFeed(callbacks)]
         if mode == "mock":
             return [MockFeed(callbacks)]
-        return [binance, bybit, OkxSwapFeed(callbacks), MockFeed(callbacks)]  # auto
+        return [binance, bybit, BinanceSpotFeed(callbacks), BybitSpotFeed(callbacks), OkxSwapFeed(callbacks), MockFeed(callbacks)]  # auto
 
     async def _select_feed(self) -> FeedConnector:
         for feed in self._candidate_feeds():
@@ -530,6 +534,7 @@ class MarketStreamer:
         now_ms = time.time() * 1000
         feed_name = self.feed.name if self.feed else ""
         venue = venue_for_feed(feed_name)
+        market = market_for_feed(feed_name)
         symbols = []
         for sym in self.top_symbols:
             st = self.state.symbols.get(sym)
@@ -547,9 +552,9 @@ class MarketStreamer:
             symbols.append(
                 {
                     "symbol": sym,
-                    "instrument_id": f"{venue}:FUTURES:{sym}",
+                    "instrument_id": f"{venue}:{market}:{sym}",
                     "venue": venue,
-                    "market": "FUTURES",
+                    "market": market,
                     "price": m.price,
                     "change5m": m.price_change_5m_pct,
                     "change24h": m.price_change_24h_pct,
@@ -607,7 +612,7 @@ class MarketStreamer:
         picks = [
             {
                 "symbol": p.symbol,
-                "instrument_id": f"{venue}:FUTURES:{p.symbol}",
+                "instrument_id": f"{venue}:{market}:{p.symbol}",
                 "score": p.scalp_score,
                 "heuristic": p.heuristic_score,
                 "anomaly": p.anomaly_score,

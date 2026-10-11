@@ -35,10 +35,15 @@ MIN_QUOTE_VOLUME_24H = 20_000_000.0
 class BinanceFuturesFeed(FeedConnector):
     name = "binance"
     ws_url = WS_URL
+    market = "FUTURES"
+    rest_base = REST_BASE
+    ticker_path = "/fapi/v1/ticker/24hr"
+    exchange_info_path = "/fapi/v1/exchangeInfo"
+    klines_path = "/fapi/v1/klines"
 
     # ------------------------------------------------------------------
     async def fetch_universe(self, n: int) -> list[dict[str, Any]]:
-        url = f"{REST_BASE}/fapi/v1/ticker/24hr"
+        url = f"{self.rest_base}{self.ticker_path}"
         timeout = aiohttp.ClientTimeout(total=15)
         coin_syms: set[str] = set()
         try:
@@ -79,7 +84,7 @@ class BinanceFuturesFeed(FeedConnector):
         Excludes tokenized stocks/commodities (MU, CCL, XAU...) at the class
         level instead of a manual denylist.
         """
-        url = f"{REST_BASE}/fapi/v1/exchangeInfo"
+        url = f"{self.rest_base}{self.exchange_info_path}"
         timeout = aiohttp.ClientTimeout(total=15)
         async with aiohttp.ClientSession(timeout=timeout) as sess:
             async with sess.get(url) as resp:
@@ -93,7 +98,7 @@ class BinanceFuturesFeed(FeedConnector):
 
     async def fetch_klines(self, symbol: str, limit: int = 300, timeframe: str = "1m") -> list[tuple]:
         """Backfill 1m OHLCV via public REST: [(open_ms, o, h, l, c, v)]."""
-        url = f"{REST_BASE}/fapi/v1/klines"
+        url = f"{self.rest_base}{self.klines_path}"
         timeout = aiohttp.ClientTimeout(total=15)
         async with aiohttp.ClientSession(timeout=timeout) as sess:
             async with sess.get(url, params={"symbol": symbol, "interval": "1d" if timeframe == "1D" else timeframe, "limit": limit}) as resp:
@@ -203,3 +208,28 @@ class BinanceFuturesFeed(FeedConnector):
             )
         except (KeyError, ValueError, TypeError):
             return
+
+
+class BinanceSpotFeed(BinanceFuturesFeed):
+    """Binance USDT spot stream using the same normalized callbacks."""
+
+    name = "binance_spot"
+    market = "SPOT"
+    rest_base = "https://api.binance.com"
+    ws_url = "wss://stream.binance.com:9443/stream"
+    ticker_path = "/api/v3/ticker/24hr"
+    exchange_info_path = "/api/v3/exchangeInfo"
+    klines_path = "/api/v3/klines"
+
+    async def _coin_symbols(self) -> set[str]:
+        url = f"{self.rest_base}{self.exchange_info_path}"
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as sess:
+            async with sess.get(url) as resp:
+                resp.raise_for_status()
+                data = await resp.json()
+        return {
+            s["symbol"]
+            for s in data.get("symbols", [])
+            if s.get("status") == "TRADING" and s.get("quoteAsset") == "USDT"
+        }

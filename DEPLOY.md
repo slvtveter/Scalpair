@@ -55,7 +55,7 @@ export RENDER_KEY=rnd_...
 
 | Переменная | Значение |
 |---|---|
-| `DATA_FEED` | `auto` (binance → bybit → okx → mock) |
+| `DATA_FEED` | `auto` (binance futures → bybit futures → Binance spot → Bybit spot → okx → mock); explicit `binance_spot`/`bybit_spot` are supported |
 | `TOP_SYMBOLS` | 30 free / 50+ paid |
 | `JWT_SECRET` | генерируется blueprint'ом |
 | `TELEGRAM_BOT_TOKEN` | опционально; без него алерты остаются in-app |

@@ -40,18 +40,19 @@ serves the same UI directly). API docs: http://localhost:8000/docs
 
 No keys to configure, nothing to sign up for. The screener boots straight into live data.
 
-## Feed resilience (Binance → Bybit → mock)
+## Feed resilience (Binance/Bybit futures and spot)
 
-`DATA_FEED=auto` (default) probes exchanges in order and degrades gracefully:
+`DATA_FEED=auto` (default) probes exchanges in order and degrades gracefully. Explicit `DATA_FEED=binance_spot` or `DATA_FEED=bybit_spot` selects a USDT spot adapter:
 
 1. **Binance USDⓈ-M futures** (`wss://fstream.binance.com`) — primary: `depth20@100ms`,
    `aggTrade`, `kline_1m`, `!ticker@arr`.
 2. **Bybit v5 public linear** (`wss://stream.bybit.com/v5/public/linear`) — full fallback:
    `orderbook.50`, `publicTrade`, `kline.1`, `tickers` (funding + OI included).
-3. **Hybrid degradation watchdog** — if the primary delivers order books but zero trades
+3. **Binance/Bybit USDT spot** — REST and public WebSocket adapters use `BI-S`/`BY-S` instrument identities and the same normalized chart/screener contract.
+4. **Hybrid degradation watchdog** — if the primary delivers order books but zero trades
    for 25s (observed on some networks/exchange edges), a supplementary Bybit feed is
    launched for trades/klines/funding while books stay with the primary venue.
-4. **MockFeed** — fully offline synthetic market so the terminal always boots, even with no
+5. **MockFeed** — fully offline synthetic market so the terminal always boots, even with no
    internet. Forced via `DATA_FEED=mock`.
 
 All sockets use exponential-backoff reconnection (1.5^n + jitter, capped 60s) and a

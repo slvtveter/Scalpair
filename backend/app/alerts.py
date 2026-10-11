@@ -21,7 +21,7 @@ from sqlalchemy import select
 from app.config import Settings
 from app.db import AlertEvent, AlertRule, NotificationDelivery, TelegramLink, UserPreference, get_session_factory
 from app.state import MarketState
-from app.instruments import venue_for_feed
+from app.instruments import market_for_feed, venue_for_feed
 
 log = logging.getLogger("scalpair.alerts")
 
@@ -66,7 +66,7 @@ class AlertEngine:
     def _rule_matches_instrument(self, rule: AlertRule) -> bool:
         if not rule.instrument_id:
             return True
-        current_id = f"{venue_for_feed(self.state.feed_mode)}:FUTURES:{rule.symbol.upper()}"
+        current_id = f"{venue_for_feed(self.state.feed_mode)}:{market_for_feed(self.state.feed_mode)}:{rule.symbol.upper()}"
         return current_id == rule.instrument_id
 
     async def _evaluate(self) -> None:
@@ -94,7 +94,7 @@ class AlertEngine:
                     continue
                 event_id = uuid.uuid4().hex
                 message = self._message(rule, observed)
-                instrument_id = rule.instrument_id or f"{venue_for_feed(self.state.feed_mode)}:FUTURES:{rule.symbol.upper()}"
+                instrument_id = rule.instrument_id or f"{venue_for_feed(self.state.feed_mode)}:{market_for_feed(self.state.feed_mode)}:{rule.symbol.upper()}"
                 sess.add(
                     AlertEvent(
                         rule_id=rule.id,

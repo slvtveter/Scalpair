@@ -1360,13 +1360,15 @@ const modal = $("chart-modal");
 let chartSym = null;
 let focusReturn = null;
 const focusSourceSelect = $("focus-source");
-const focusVenueNames = {"BI-F":"Binance Futures", "BY-F":"Bybit Futures", "OK-F":"OKX Futures", "DEMO":"Demo"};
+const focusVenueNames = {"BI-F":"Binance Futures", "BI-S":"Binance Spot", "BY-F":"Bybit Futures", "BY-S":"Bybit Spot", "OK-F":"OKX Futures", "DEMO":"Demo"};
+function focusMarketForVenue(venue) { return venue?.endsWith("-S") ? "SPOT" : "FUTURES"; }
 function focusInstrumentId() {
   const row = S.bySym.get(chartSym);
-  return chartSym ? `${S.focusVenue || row?.venue || "UNKNOWN"}:FUTURES:${chartSym}` : "";
+  const venue = S.focusVenue || row?.venue || "UNKNOWN";
+  return chartSym ? `${venue}:${focusMarketForVenue(venue)}:${chartSym}` : "";
 }
 function setupFocusSource(row) {
-  const venues = [...new Set([row?.venue, "BI-F", "BY-F", "OK-F"].filter(Boolean))];
+  const venues = [...new Set([row?.venue, "BI-F", "BI-S", "BY-F", "BY-S", "OK-F"].filter(Boolean))];
   focusSourceSelect.innerHTML = venues.map(v => `<option value="${esc(v)}">${esc(focusVenueNames[v] || v)}</option>`).join("");
   if (!venues.includes(S.focusVenue)) S.focusVenue = row?.venue || venues[0];
   focusSourceSelect.value = S.focusVenue;

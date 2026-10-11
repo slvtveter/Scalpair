@@ -32,7 +32,7 @@ syntax/static-server checks did not establish functional or visual acceptance.
 ## Outstanding acceptance gaps (non-exhaustive)
 
 - Backend state is keyed by symbol, not instrument. Simultaneous Binance/Bybit
-  Spot/Futures are not implemented. Single-source transitions now discard old
+  Spot adapters are now available for explicit `DATA_FEED=binance_spot` and `DATA_FEED=bybit_spot` runs, with `BI-S`/`BY-S` identity. Single-source transitions now discard old
   data and reject late callbacks/REST responses. Full instrument-keyed state
   is still required for simultaneous exchange support.
 - Focus now requests native exchange timeframes through 1D. Multiple Focus
@@ -376,7 +376,7 @@ syntax/static-server checks did not establish functional or visual acceptance.
 
 ## Instrument identity metadata
 
-- Snapshot, symbol catalog and candle payloads now include stable `instrument_id` values (`VENUE:FUTURES:SYMBOL`) so consumers can distinguish source identity without relying on a ticker string.
+- Snapshot, symbol catalog and candle payloads now include stable `instrument_id` values (`VENUE:MARKET:SYMBOL`) so consumers can distinguish source identity without relying on a ticker string.
 - The current streamer still runs one active market source and needs true simultaneous Spot/Futures state before claiming multi-market coverage.
 
 
@@ -417,3 +417,9 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - The browser writes these values when changed and restores them after login;
   the server allowlist drops unknown preference keys.
 - API auth round-trip coverage and all frontend tests pass locally.
+
+## Spot adapter coverage
+
+- Added Binance Spot and Bybit Spot normalized adapters with USDT universe, ticker, kline, trade and order-book streams.
+- API history routing validates that `BI-S`/`BY-S` identities use `SPOT` and keeps alternate-source overlays unavailable.
+- The default deployment remains one active source; simultaneous four-source state still requires the planned instrument-keyed multi-feed store.

@@ -30,6 +30,8 @@ WS_URL = "wss://stream.bybit.com/v5/public/linear"
 class BybitLinearFeed(FeedConnector):
     name = "bybit"
     ws_url = WS_URL
+    market = "FUTURES"
+    category = "linear"
     keepalive_payload = {"op": "ping"}
     keepalive_interval = 20.0
 
@@ -47,7 +49,7 @@ class BybitLinearFeed(FeedConnector):
         url = f"{REST_BASE}/v5/market/tickers"
         timeout = aiohttp.ClientTimeout(total=15)
         async with aiohttp.ClientSession(timeout=timeout) as sess:
-            async with sess.get(url, params={"category": "linear"}) as resp:
+            async with sess.get(url, params={"category": self.category}) as resp:
                 resp.raise_for_status()
                 body = await resp.json()
         if body.get("retCode", 0) != 0:
@@ -79,7 +81,7 @@ class BybitLinearFeed(FeedConnector):
         async with aiohttp.ClientSession(timeout=timeout) as sess:
             async with sess.get(
                 url,
-                params={"category": "linear", "symbol": symbol, "interval": {"1m":"1", "3m":"3", "5m":"5", "15m":"15", "30m":"30", "1h":"60", "4h":"240", "1D":"D"}[timeframe], "limit": min(limit, 1000)},
+                params={"category": self.category, "symbol": symbol, "interval": {"1m":"1", "3m":"3", "5m":"5", "15m":"15", "30m":"30", "1h":"60", "4h":"240", "1D":"D"}[timeframe], "limit": min(limit, 1000)},
             ) as resp:
                 resp.raise_for_status()
                 body = await resp.json()
@@ -253,3 +255,12 @@ class BybitLinearFeed(FeedConnector):
 
     def _is_tracked(self, symbol: str) -> bool:
         return symbol in self.top_symbols
+
+
+class BybitSpotFeed(BybitLinearFeed):
+    """Bybit USDT spot stream using the normalized Bybit callbacks."""
+
+    name = "bybit_spot"
+    market = "SPOT"
+    category = "spot"
+    ws_url = "wss://stream.bybit.com/v5/public/spot"
