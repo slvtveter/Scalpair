@@ -443,3 +443,10 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Secondary rows carry their own book, candles, density and metrics state; the existing `auto` path remains single-source failover.
 - Regression coverage verifies that identical BTCUSDT rows retain `BY-F:FUTURES` and `BI-S:SPOT` identities.
 - Multi mode is intentionally opt-in because it multiplies upstream WebSocket and REST backfill budgets.
+
+## Latest production verification (2026-10-11)
+
+- Commit `3a6ba40` is present on `main`; backend and frontend test suites pass (backend full suite, frontend 37 tests).
+- Render backend health returned HTTP 200 with `status=ok`, Bybit WebSocket `connects=1`, zero errors and continuously increasing message count.
+- `GET /api/v1/screeners/overview` returned HTTP 200 after repeated requests without restarting the worker. The payload is pre-encoded on the metrics tick to keep serialization off the request path.
+- Frontend `/en` returned HTTP 200.
