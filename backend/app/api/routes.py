@@ -15,7 +15,7 @@ import time
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
-from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, Response
 
 from app.api.auth import User, current_user
 from app.instruments import market_for_feed, venue_for_feed
@@ -208,8 +208,11 @@ async def overview(request: Request) -> JSONResponse:
     # Reuse the snapshot produced by the metrics loop. Rebuilding all walls,
     # levels and picks in the request path can starve the event loop on a free
     # Render instance while the upstream feed is busy.
-    snapshot = streamer._last_snapshot or streamer.build_snapshot()
-    return JSONResponse({"ts": int(time.time() * 1000), "symbols": snapshot["symbols"]})
+    if streamer._last_overview_body is None:
+        streamer.build_snapshot()
+    if streamer._last_overview_body is not None:
+        return Response(content=streamer._last_overview_body, media_type="application/json")
+    return JSONResponse({"ts": int(time.time() * 1000), "symbols": []})
 
 
 @router.get("/screeners/score-alerts")

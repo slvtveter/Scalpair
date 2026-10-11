@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
 import time
 from typing import Any
@@ -55,6 +56,7 @@ class MarketStreamer:
         self.source_states: dict[str, MarketState] = {}
         self.source_symbols: dict[str, list[str]] = {}
         self._last_snapshot: dict[str, Any] | None = None
+        self._last_overview_body: bytes | None = None
         self.top_symbols: list[str] = []
         self._tasks: list[asyncio.Task] = []
         self._stop = asyncio.Event()
@@ -789,4 +791,8 @@ class MarketStreamer:
             },
         }
         self._last_snapshot = snapshot
+        # Encode once on the metrics loop; HTTP requests only copy these bytes.
+        self._last_overview_body = json.dumps(
+            {"ts": int(now_ms), "symbols": symbols}, separators=(",", ":")
+        ).encode("utf-8")
         return snapshot
