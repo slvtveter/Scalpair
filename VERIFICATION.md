@@ -240,7 +240,10 @@ syntax/static-server checks did not establish functional or visual acceptance.
   explicit `in_app:muted` delivery and suppressing Telegram sends during DND.
 - Docker auth smoke test persisted and returned `dndUntil` through
   `GET/PUT /api/v1/preferences`; frontend syntax/tests and whitespace checks
-  pass. Production verification is pending deployment of this change.
+  pass.
+- After Render deployment `1ca4f07`, backend health returned HTTP 200 with an
+  active Bybit feed and the published `/en` document contains the DND control
+  (`dnd-select`).
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
