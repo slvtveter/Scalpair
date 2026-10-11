@@ -60,6 +60,8 @@ async def lifespan(app: FastAPI):
     streamer = MarketStreamer(state, settings, scorer, broadcaster.publish)
 
     alert_engine = AlertEngine(state, settings, scorer)
+    # Resolve multi-source states lazily after streamer startup populates them.
+    alert_engine.source_provider = lambda: streamer.source_states
     alert_task = asyncio.create_task(alert_engine.run(), name="alert-engine")
 
     dispatch_task = asyncio.create_task(broadcaster.run(), name="broadcaster-dispatch")

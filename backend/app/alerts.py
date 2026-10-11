@@ -14,6 +14,7 @@ import logging
 import os
 import time
 import uuid
+from typing import Callable
 
 import aiohttp
 from sqlalchemy import select
@@ -33,12 +34,14 @@ class AlertEngine:
     DELIVERY_RETRY_S = 10.0
     MAX_ATTEMPTS = 3
 
-    def __init__(self, state: MarketState, settings: Settings, scorer) -> None:
+    def __init__(self, state: MarketState, settings: Settings, scorer,
+                 source_provider: Callable[[], dict[str, MarketState]] | None = None) -> None:
         self.state = state
         self.settings = settings
         self.scorer = scorer
         self._stop = asyncio.Event()
         self.telegram_configured = bool(os.environ.get("TELEGRAM_BOT_TOKEN"))
+        self.source_provider = source_provider or (lambda: {})
 
     def stop(self) -> None:
         self._stop.set()
@@ -63,10 +66,19 @@ class AlertEngine:
     # ------------------------------------------------------------------
     # Evaluation
     # ------------------------------------------------------------------
-    def _rule_matches_instrument(self, rule: AlertRule) -> bool:
+    def _state_for_rule(self, rule: AlertRule) -> MarketState:
+        if rule.instrument_id:
+            venue = rule.instrument_id.split(":", 1)[0]
+            for feed_name, state in self.source_provider().items():
+                if venue_for_feed(feed_name) == venue:
+                    return state
+        return self.state
+
+    def _rule_matches_instrument(self, rule: AlertRule, state: MarketState | None = None) -> bool:
         if not rule.instrument_id:
             return True
-        current_id = f"{venue_for_feed(self.state.feed_mode)}:{market_for_feed(self.state.feed_mode)}:{rule.symbol.upper()}"
+        state = state or self.state
+        current_id = f"{venue_for_feed(state.feed_mode)}:{market_for_feed(state.feed_mode)}:{rule.symbol.upper()}"
         return current_id == rule.instrument_id
 
     async def _evaluate(self) -> None:
@@ -76,12 +88,13 @@ class AlertEngine:
             now_s = time.time()
             dnd_by_user: dict[int, bool] = {}
             for rule in rules:
-                if not self._rule_matches_instrument(rule):
+                target_state = self._state_for_rule(rule)
+                if not self._rule_matches_instrument(rule, target_state):
                     continue
                 if rule.last_triggered_at and now_s - rule.last_triggered_at < rule.cooldown_s:
                     continue
-                price = self.state.symbols.get(rule.symbol.upper()).price if rule.symbol.upper() in self.state.symbols else None
-                fired, observed = self._check(rule, price)
+                price = target_state.symbols.get(rule.symbol.upper()).price if rule.symbol.upper() in target_state.symbols else None
+                fired, observed = self._check(rule, price, target_state)
                 if not fired:
                     # keep the anchor updated for edge detection
                     if rule.rule_type in ("price_cross_above", "price_cross_below") and price is not None:
@@ -138,8 +151,9 @@ class AlertEngine:
                 log.info("alert fired: %s %s %s observed=%s", rule.symbol, rule.rule_type, rule.threshold, observed)
             await sess.commit()
 
-    def _check(self, rule: AlertRule, price: float | None) -> tuple[bool, float | None]:
+    def _check(self, rule: AlertRule, price: float | None, state: MarketState | None = None) -> tuple[bool, float | None]:
         """Returns (fired, observed_value). Edge semantics for crossings."""
+        state = state or self.state
         if rule.rule_type in ("price_cross_above", "price_cross_below", "pct_move"):
             if price is None or price <= 0:
                 return False, None
@@ -151,7 +165,7 @@ class AlertEngine:
                 fired = prev is not None and prev >= rule.threshold > price
                 return fired, price
             # pct_move over the configured window: anchor = price window_s ago
-            sym_state = self.state.symbols.get(rule.symbol.upper())
+            sym_state = state.symbols.get(rule.symbol.upper())
             hist = list(sym_state.price_history) if sym_state else []
             target_ms = time.time() * 1000 - rule.window_s * 1000
             base = None
@@ -165,7 +179,7 @@ class AlertEngine:
             moved = abs(price / base - 1) * 100.0
             return moved >= rule.threshold, moved
         if rule.rule_type == "volume_surge":
-            sym = self.state.symbols.get(rule.symbol.upper())
+            sym = state.symbols.get(rule.symbol.upper())
             surge = sym.metrics.surge_closed if sym else None
             return (surge is not None and surge >= rule.threshold), surge
         if rule.rule_type == "score_above":
@@ -173,7 +187,7 @@ class AlertEngine:
             score = pick.scalp_score if pick else None
             return (score is not None and score >= rule.threshold), score
         if rule.rule_type == "cascade_distance":
-            sym = self.state.symbols.get(rule.symbol.upper())
+            sym = state.symbols.get(rule.symbol.upper())
             if not sym or not price or price <= 0: return False, None
             distances = [abs(price - z.mid) / price * 100.0 for z in sym.cascades if z.mid > 0]
             distance = min(distances, default=None)
@@ -181,7 +195,7 @@ class AlertEngine:
             fired = condition and rule.last_value is not None and rule.last_value < 0.5
             return fired, distance
         if rule.rule_type == "density_appeared":
-            sym = self.state.symbols.get(rule.symbol.upper())
+            sym = state.symbols.get(rule.symbol.upper())
             if not sym: return False, None
             largest = max((float(w.get("notional_usd", 0)) for w in sym.walls.values()), default=0.0)
             condition = largest >= rule.threshold
