@@ -240,44 +240,76 @@ async def instruments(
     q: str | None = Query(default=None, max_length=64),
     exchange: str | None = Query(default=None, max_length=16),
     market: str | None = Query(default=None, max_length=16),
+    all_sources: bool = Query(default=False),
+    source: str | None = Query(default=None, max_length=8),
 ) -> JSONResponse:
-    """Unified instrument catalog contract used by search clients."""
+    """Source-labelled instrument discovery catalog.
+
+    ``all_sources`` uses REST ticker snapshots for discovery only. Rows retain
+    their exact source identity and are not presented as a live unified feed.
+    """
     streamer = request.app.state.streamer
-    feed_name = streamer.feed.name if streamer.feed else ""
-    venue = venue_for_feed(feed_name)
-    active_market = market_for_feed(feed_name)
     query = q.strip().upper() if q else ""
     exchange_filter = exchange.strip().upper() if exchange else ""
     market_filter = market.strip().upper() if market else ""
+    source_filter = source.strip().upper() if source else ""
+    source_map = {
+        "BI-F": BinanceFuturesFeed, "BI-S": BinanceSpotFeed,
+        "BY-F": BybitLinearFeed, "BY-S": BybitSpotFeed,
+        "OK-F": OkxSwapFeed, "DEMO": MockFeed,
+    }
+    callbacks = FeedCallbacks(_noop_feed_callback, _noop_feed_callback, _noop_feed_callback, _noop_feed_callback, _noop_feed_callback)
+    if source_filter in source_map:
+        requested = [source_map[source_filter](callbacks)]
+    elif all_sources:
+        requested = [cls(callbacks) for venue, cls in source_map.items() if venue != "DEMO"]
+    else:
+        requested = [streamer.feed] if streamer.feed else []
+
+    async def rows_for(feed):
+        if feed is streamer.feed:
+            return [(sym, request.app.state.market_state.symbols.get(sym)) for sym in streamer.top_symbols]
+        try:
+            tickers = await asyncio.wait_for(feed.fetch_universe(streamer.settings.top_symbols), timeout=12)
+            return [(row.get("symbol"), row) for row in tickers]
+        except Exception:
+            return []
+
     rows = []
-    for symbol in streamer.top_symbols:
-        st = request.app.state.market_state.symbols.get(symbol)
-        if st is None:
-            continue
-        if query and query not in symbol.upper():
-            continue
+    feed_rows = await asyncio.gather(*(rows_for(feed) for feed in requested if feed is not None))
+    for feed, source_rows in zip([feed for feed in requested if feed is not None], feed_rows):
+        venue = venue_for_feed(feed.name)
+        feed_market = market_for_feed(feed.name)
         if exchange_filter and exchange_filter not in venue:
             continue
-        if market_filter and market_filter != active_market:
+        if market_filter and market_filter != feed_market:
             continue
-        rows.append(
-            {
-                "asset_id": symbol.removesuffix("USDT").lower(),
+        for symbol, raw in source_rows:
+            if not symbol:
+                continue
+            symbol = str(symbol).upper()
+            if query and query not in symbol:
+                continue
+            if isinstance(raw, dict):
+                price = float(raw.get("last_price") or 0)
+                volume = float(raw.get("quote_volume_24h") or 0)
+                state_row = request.app.state.market_state.symbols.get(symbol)
+            else:
+                price = float(raw.price) if raw else 0
+                volume = float(raw.quote_volume_24h) if raw else 0
+                state_row = raw
+            rows.append({
+                "asset_id": (state_row.asset_id if state_row else None) or symbol.removesuffix("USDT").lower(),
                 "symbol": symbol,
-                "instrument_id": f"{venue}:{active_market}:{symbol}",
-                "venue": venue,
-                "exchange": venue.split("-", 1)[0],
-                "market": active_market,
-                "quote": "USDT",
-                "price": st.price,
-                "quote_volume_24h": st.quote_volume_24h,
-                "asset_id": st.asset_id,
-                "market_cap_usd": st.market_cap_usd,
-                "market_cap_source": st.market_cap_source,
-                "market_cap_updated_at": st.market_cap_updated_at,
-            }
-        )
-    return JSONResponse({"feed": request.app.state.market_state.feed_mode, "instruments": rows})
+                "instrument_id": f"{venue}:{feed_market}:{symbol}",
+                "venue": venue, "exchange": venue.split("-", 1)[0], "market": feed_market,
+                "quote": "USDT", "price": price, "quote_volume_24h": volume,
+                "market_cap_usd": state_row.market_cap_usd if state_row else None,
+                "market_cap_source": state_row.market_cap_source if state_row else None,
+                "market_cap_updated_at": state_row.market_cap_updated_at if state_row else None,
+                "live": feed is streamer.feed,
+            })
+    return JSONResponse({"feed": request.app.state.market_state.feed_mode, "all_sources": all_sources, "instruments": rows})
 
 
 @router.get("/markets/{symbol}/candles")

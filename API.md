@@ -25,6 +25,7 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `POST /auth/login` | → `{access_token, subscription_tier}` (JWT HS256) |
 | `GET /auth/me` | Bearer required |
 | `GET /preferences` | authenticated workspace settings and layout |
+| `GET /instruments?all_sources=true` | source-labelled Spot/Futures discovery catalog; REST snapshots are marked `live: false` and never substitute for WS state |
 | `PUT /preferences` | authenticated workspace settings (board groups/order/filters, sound/DND, plus Focus `focusLayout`, `focusVenue`, `syncCrosshair`, `syncRange`, and per-pane `paneOverlays`) |
 | `POST /telegram/link` / `DELETE /telegram/link` | authenticated one-time Telegram deep-link creation and unlink |
 | `POST /telegram/webhook` | Telegram `/start <token>` callback; optional `TELEGRAM_WEBHOOK_SECRET` header validation |

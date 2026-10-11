@@ -1267,8 +1267,8 @@ $("wall-filter").addEventListener("change", (e) => { S.wallMin = +e.target.value
 function searchMarkets(query) {
   const normalized = query.toUpperCase().replace(/[\s/\-]/g, "");
   if (!normalized) return [];
-  const all = new Map(S.catalog.map(row => [row.symbol, row]));
-  for (const row of S.symbols) all.set(row.symbol, {...all.get(row.symbol), ...row});
+  const all = new Map(S.catalog.map(row => [row.instrument_id || row.symbol, row]));
+  for (const row of S.symbols) all.set(row.instrument_id || row.symbol, {...all.get(row.instrument_id || row.symbol), ...row});
   const exact = row => row.symbol === normalized || row.symbol.replace(/USDT$/, "") === normalized;
   return [...all.values()].filter(row => row.symbol.includes(normalized) || (row.name || "").toUpperCase().includes(normalized))
     .sort((a,b) => Number(exact(b)) - Number(exact(a)) || a.symbol.localeCompare(b.symbol)).slice(0, 30);
@@ -1281,11 +1281,11 @@ async function loadSearchCatalog() {
   if (catalogRequest?.epoch === epoch) return catalogRequest.promise;
   const promise = (async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/v1/markets/symbols`, {signal: AbortSignal.timeout(8000)});
+      const res = await fetch(`${API_BASE}/api/v1/instruments?all_sources=true`, {signal: AbortSignal.timeout(12000)});
       if (!res.ok) return;
       const body = await res.json();
       if (epoch !== S.dataEpoch) return;
-      S.catalog = body.symbols || []; S.catalogAt = Date.now();
+      S.catalog = body.instruments || []; S.catalogAt = Date.now();
     } catch { /* Unfiltered snapshot symbols remain searchable offline. */ }
   })();
   catalogRequest = {epoch, promise};

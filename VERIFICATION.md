@@ -430,3 +430,9 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Tokens are short-lived, single-use, cleared after binding, and never expose the user id in the URL.
 - Optional `TELEGRAM_WEBHOOK_SECRET` validates Telegram's secret header before parsing updates.
 - API coverage verifies successful binding and replay rejection.
+
+## Source-labelled discovery catalog
+
+- `GET /api/v1/instruments?all_sources=true` discovers Binance Futures/Spot, Bybit Futures/Spot and OKX Futures in parallel REST requests.
+- Every row carries `VENUE:MARKET:SYMBOL`; non-active discovery rows are explicitly marked `live: false`.
+- Search now uses this catalog, so identical tickers from Spot and Futures remain distinct when opening Focus.

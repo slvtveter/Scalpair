@@ -59,6 +59,16 @@ class TestHealth:
 
 
 class TestScreeners:
+    def test_instrument_catalog_is_source_labelled(self, client):
+        r = client.get("/api/v1/instruments")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["instruments"]
+        row = body["instruments"][0]
+        assert row["instrument_id"].endswith(f":{row['symbol']}")
+        assert row["market"] in ("FUTURES", "SPOT")
+        assert row["live"] is True
+
     def test_overview(self, client):
         r = client.get("/api/v1/screeners/overview")
         assert r.status_code == 200
