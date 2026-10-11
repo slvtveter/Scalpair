@@ -455,8 +455,23 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Commit `924650f` keeps one price sample per second under high trade throughput and normalizes speed by the selected window; targeted and full backend tests pass.
 - Commit `af05024` prevents secondary-market score alerts from borrowing the primary source's ticker-keyed score; the integration test confirms one source-bound event and exactly one in-app plus one Telegram delivery row.
 - Final audit on 2026-10-11: 137 backend tests and 37 frontend tests pass; Render health, overview and frontend `/en` each returned HTTP 200 with a live Bybit stream.
-- Local ASGI load test with `DATA_FEED=mock`, 20 REST requests/sec for 10 seconds and 16 concurrent WebSocket clients: 196 REST requests, 0 errors, p95 6.3 ms, all 16 clients delivered snapshots. This validates the 16-client target on the test machine only; 200-symbol and browser 16-chart acceptance remain open.
-- The mock harness now scales deterministically to 200 instruments (`a107733`). Repeating the same test at `TOP_SYMBOLS=200` delivered 195 REST requests with 0 errors (p95 17.6 ms), all 16 WebSocket clients delivered snapshots, and `/health` reported 200 tracked symbols. This is backend/load evidence only; browser 16-chart profiling remains open.
+- Local ASGI load test with `DATA_FEED=mock`, 20 REST requests/sec for 10 seconds and 16 concurrent WebSocket clients: 196 REST requests, 0 errors, p95 6.3 ms, all 16 clients delivered snapshots. This validates the 16-client target on the test machine only; live production scale remains open.
+- The mock harness now scales deterministically to 200 instruments (`a107733`). Repeating the same test at `TOP_SYMBOLS=200` delivered 195 REST requests with 0 errors (p95 17.6 ms), all 16 WebSocket clients delivered snapshots, and `/health` reported 200 tracked symbols. Browser 16-chart lifecycle evidence is recorded below; live production profiling remains open.
 - Commit `9c927d0` adds a short WebSocket preflight to `DATA_FEED=auto`, so REST-only probes cannot select a source whose streaming handshake is blocked.
 - Commit `8d08c7d` extends that protection to stale explicit dashboard feed settings: the configured venue is tried first, then other live adapters are probed before mock fallback. Current Render health reports `configured_feed=bybit`, `status=ok`, one live WS connection and zero errors.
 - Final rollout audit after `f881f0d`: 138 backend tests and 37 frontend tests pass; Render reports `configured_feed=bybit`, `status=ok`, `connects=1`, `errors=0`, and overview/frontend both return HTTP 200.
+
+## Browser scale and Focus lifecycle acceptance
+
+- `scripts/check_focus_browser.py` was run against the current frontend in
+  isolated headless Chrome with deterministic synthetic responses.
+- The check loaded 200 instruments, rendered a 4×4 board (16 canvases), opened
+  Focus with 300 candles in the active 1m pane and completed 100 open/close
+  round trips.
+- p95 round-trip time was 17.4 ms. DOM nodes changed from 10,645 to 10,677;
+  JavaScript event listeners stayed at 118; heap usage rose from 2.07 MB to
+  2.18 MB after garbage collection; one fixture socket remained active and no
+  runtime exceptions occurred.
+- This closes the browser-scale lifecycle gap for the synthetic fixture. It does
+  not prove equivalent performance with live exchange payloads or Render's
+  free-tier resource limits.
