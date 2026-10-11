@@ -1375,15 +1375,23 @@ const chart = {
 const focusPanes = [chart, ...[1440,5,60].map((tf,index) => ({...chart,index:index+1,tfMin:tf,sourceTf:tf,candles:[],series:[],walls:[],levels:[]}))];
 function paneCanvas(pane) { return $(pane.index ? `chart-canvas-${pane.index}` : "chart-canvas"); }
 let drawingTool = "none", drawingDraft = null;
-function drawingKey() { return `drawings:${chartSym || ""}`; }
+function drawingKey() { return `drawings:${focusInstrumentId() || chartSym || ""}`; }
 function loadDrawings() { return LS.get(drawingKey(), []); }
 function saveDrawings(rows) {
   LS.set(drawingKey(), rows);
-  if (S.jwt && chartSym) api(`/api/v1/drawings/${encodeURIComponent(chartSym)}`, {method:"PUT", body:JSON.stringify({drawings:rows})}).catch(()=>{});
+  if (S.jwt && chartSym) {
+    const query = focusInstrumentId() ? `?instrument_id=${encodeURIComponent(focusInstrumentId())}` : "";
+    api(`/api/v1/drawings/${encodeURIComponent(chartSym)}${query}`, {method:"PUT", body:JSON.stringify({drawings:rows})}).catch(()=>{});
+  }
 }
 async function loadServerDrawings(symbol) {
   if (!S.jwt || !symbol) return;
-  try { const r=await api(`/api/v1/drawings/${encodeURIComponent(symbol)}`); if(!r.ok)return; const b=await r.json(); LS.set(`drawings:${symbol}`,b.drawings||[]); drawChart(); } catch {}
+  try {
+    const query = focusInstrumentId() ? `?instrument_id=${encodeURIComponent(focusInstrumentId())}` : "";
+    const r=await api(`/api/v1/drawings/${encodeURIComponent(symbol)}${query}`);
+    if(!r.ok)return;
+    const b=await r.json(); LS.set(drawingKey(),b.drawings||[]); drawChart();
+  } catch {}
 }
 function setDrawingTool(tool) { drawingTool=tool; drawingDraft=null; document.querySelectorAll(".draw-btn").forEach(b=>b.classList.toggle("active",b.dataset.draw===tool)); drawChart(); }
 document.querySelectorAll(".draw-btn").forEach(b=>b.addEventListener("click",()=>setDrawingTool(b.dataset.draw)));

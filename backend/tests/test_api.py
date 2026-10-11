@@ -128,6 +128,10 @@ class TestAuth:
         assert r.status_code == 200
         assert r.json()["drawings"] == payload["drawings"]
         assert client.get("/api/v1/drawings/BTCUSDT", headers=headers).json()["drawings"] == payload["drawings"]
+        other = {"drawings": [{"type": "trend", "a": {"t": 1, "p": 2}}]}
+        assert client.put("/api/v1/drawings/BTCUSDT?instrument_id=BY-F:FUTURES:BTCUSDT", json=other, headers=headers).status_code == 200
+        assert client.get("/api/v1/drawings/BTCUSDT?instrument_id=BY-F:FUTURES:BTCUSDT", headers=headers).json()["drawings"] == other["drawings"]
+        assert client.get("/api/v1/drawings/BTCUSDT", headers=headers).json()["drawings"] == payload["drawings"]
         assert client.get("/api/v1/drawings/BTCUSDT").status_code == 401
 
     def test_duplicate_register_conflict(self, client):

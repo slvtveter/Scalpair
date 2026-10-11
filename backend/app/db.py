@@ -52,11 +52,12 @@ class UserPreference(Base):
 
 
 class ChartDrawing(Base):
-    """User-owned Focus drawings keyed by symbol."""
+    """User-owned Focus drawings keyed by symbol and optional instrument."""
     __tablename__ = "chart_drawings"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     symbol: Mapped[str] = mapped_column(String(32), index=True)
+    instrument_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     drawings: Mapped[list] = mapped_column(JSON, default=list)
     updated_at: Mapped[float] = mapped_column(Float, default=time.time, onupdate=time.time)
 
@@ -179,6 +180,10 @@ async def init_db(database_url: str) -> None:
             if "instrument_id" not in event_columns:
                 await conn.execute(text("ALTER TABLE alert_events ADD COLUMN instrument_id VARCHAR(128)"))
                 await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_alert_events_instrument_id ON alert_events (instrument_id)"))
+            drawing_columns = {row[1] for row in (await conn.execute(text("PRAGMA table_info(chart_drawings)"))).all()}
+            if "instrument_id" not in drawing_columns:
+                await conn.execute(text("ALTER TABLE chart_drawings ADD COLUMN instrument_id VARCHAR(128)"))
+                await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_chart_drawings_instrument_id ON chart_drawings (instrument_id)"))
             await conn.execute(text("PRAGMA journal_mode=WAL"))
     log.info("database ready (%s)", database_url.split("://")[0])
 

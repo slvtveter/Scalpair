@@ -323,6 +323,16 @@ syntax/static-server checks did not establish functional or visual acceptance.
   database. A full authenticated notification event remains dependent on a
   real user-triggered alert.
 
+## Instrument-bound Focus drawings
+
+- Authenticated drawings now accept an optional `instrument_id`; local and
+  server keys include it, so BTC drawings on Binance and Bybit remain separate.
+- Legacy symbol-only drawing rows continue to work when the query is omitted;
+  existing SQLite databases receive a nullable column and index at startup.
+- API regression coverage verifies two drawing sets for one ticker stay
+  isolated. Docker startup, syntax checks, 36 frontend tests and whitespace
+  checks pass; production deployment is pending.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 

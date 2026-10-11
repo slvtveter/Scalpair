@@ -28,6 +28,7 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `PUT /preferences` | authenticated workspace settings (groups, hidden, order, filters, layout, sound, `dndUntil` Unix seconds) |
 | `GET /watchlists` | authenticated favorite symbols |
 | `PUT /watchlists` | replace authenticated favorite symbols |
+| `GET/PUT /drawings/{SYMBOL}?instrument_id=` | authenticated Focus drawings; optional instrument binding isolates the same ticker across exchanges |
 
 ## Alert rules (Bearer required)
 | Endpoint | Description |
