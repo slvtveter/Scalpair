@@ -331,7 +331,9 @@ syntax/static-server checks did not establish functional or visual acceptance.
   existing SQLite databases receive a nullable column and index at startup.
 - API regression coverage verifies two drawing sets for one ticker stay
   isolated. Docker startup, syntax checks, 36 frontend tests and whitespace
-  checks pass; production deployment is pending.
+  checks pass. After Render deployment `4efd5fe`, backend health returned
+  HTTP 200 with active Bybit data and the published `/en` includes the Focus
+  source selector; database migration completed during startup.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
