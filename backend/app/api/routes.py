@@ -144,6 +144,7 @@ async def densities(request: Request, limit: int = Query(50, ge=1, le=200)) -> J
                 {
                     "symbol": sym,
                     "venue": venue,
+                    "market": market_for_feed(feed_name),
                     "side": w["side"],
                     "price": w["price"],
                     "notional_usd": w["notional_usd"],

@@ -82,10 +82,12 @@ class TestScreeners:
         r = client.get("/api/v1/screeners/densities")
         assert r.status_code == 200
         body = r.json()
+        assert body["coverage"]["complete_percent_range"] is False
         for w in body["walls"]:
             assert w["side"] in ("bid", "ask")
             assert w["notional_usd"] > 0
             assert "distance_pct" in w
+            assert w["market"] in ("FUTURES", "SPOT")
 
     def test_ai_picks(self, client):
         r = client.get("/api/v1/screeners/ai-picks?top=3")
