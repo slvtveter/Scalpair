@@ -810,7 +810,16 @@ class MarketStreamer:
         }
         self._last_snapshot = snapshot
         # Encode once on the metrics loop; HTTP requests only copy these bytes.
+        overview_fields = {
+            "symbol", "instrument_id", "venue", "market", "price", "change5m",
+            "change24h", "vol1m", "vol24h", "marketCapUsd", "vol5m", "surge",
+            "imbalance", "spreadBps", "depth", "tps", "funding", "nearestWall",
+            "natr", "speed", "range5m", "levelDist", "levelKind", "score", "tag",
+            "bookTs", "densityCoverage",
+            "walls", "levels",
+        }
+        compact_symbols = [{key: row.get(key) for key in overview_fields} for row in symbols]
         self._last_overview_body = json.dumps(
-            {"ts": int(now_ms), "symbols": symbols}, separators=(",", ":")
+            {"ts": int(now_ms), "symbols": compact_symbols}, separators=(",", ":")
         ).encode("utf-8")
         return snapshot
