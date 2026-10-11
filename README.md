@@ -123,6 +123,11 @@ python3 -m venv .venv && ./.venv/bin/pip install -r requirements-dev.txt
 Environment knobs (see `.env.example`): `DATA_FEED`, `TOP_SYMBOLS`, `ML_SCORE_INTERVAL`,
 `WALL_MULTIPLIER`, `WS_BROADCAST_RATE`, `REDIS_URL`, `DATABASE_URL`, `JWT_SECRET`.
 
+`DATABASE_URL` may be a local `sqlite+aiosqlite:///...` URL or a platform
+PostgreSQL URL (`postgres://...` / `postgresql://...`); PostgreSQL URLs are
+normalized to the asyncpg driver at startup. Use PostgreSQL for persistent
+users, preferences, alert events and drawings in a multi-instance deployment.
+
 ## Safety constraints honored
 
 - Public, unauthenticated exchange endpoints only — no API keys anywhere in the codebase.

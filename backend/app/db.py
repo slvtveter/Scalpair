@@ -139,9 +139,19 @@ _engine = None
 _session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
+def async_database_url(database_url: str) -> str:
+    """Normalize platform-provided PostgreSQL URLs for async SQLAlchemy."""
+    if database_url.startswith("postgres://"):
+        return "postgresql+asyncpg://" + database_url[len("postgres://"):]
+    if database_url.startswith("postgresql://"):
+        return "postgresql+asyncpg://" + database_url[len("postgresql://"):]
+    return database_url
+
+
 def get_engine(database_url: str):
     global _engine
     if _engine is None:
+        database_url = async_database_url(database_url)
         if database_url.startswith("sqlite"):
             db_path = database_url.split("///")[-1]
             if db_path and db_path != ":memory:":
@@ -170,6 +180,7 @@ def get_session_factory(database_url: str) -> async_sessionmaker[AsyncSession]:
 
 async def init_db(database_url: str) -> None:
     engine = get_engine(database_url)
+    database_url = async_database_url(database_url)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         if database_url.startswith("sqlite"):

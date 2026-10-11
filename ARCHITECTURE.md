@@ -12,7 +12,7 @@ MockFeed (offline) ─┘   (reconnect/backoff,     ├─→ levels engine (piv
                                                         │
                                               REST /api/v1/* (FastAPI, pydantic v2)
                                                         │
-                                              SQLite WAL (users, rules, events, deliveries)
+                                              SQL database (SQLite WAL locally; PostgreSQL/asyncpg in production)
                                                         │
                                      frontend: vanilla JS terminal (table / board 3×3 / chart modal)
 ```
@@ -30,7 +30,7 @@ MockFeed (offline) ─┘   (reconnect/backoff,     ├─→ levels engine (piv
 | `app/alerts.py` | server-side rules engine, edge semantics, cooldown/re-arm, durable deliveries |
 | `app/services/{streamer,broadcaster}.py` | orchestration loops; throttled WS fanout with per-client bounded queues |
 | `app/api/{routes,auth,alerts_api,ratelimit}.py` | REST + WS endpoints, JWT, CRUD, rate limits |
-| `app/db.py` | SQLAlchemy async, SQLite WAL (swap URL for Postgres) |
+| `app/db.py` | SQLAlchemy async, SQLite WAL locally; accepts `postgres://` / `postgresql://` with asyncpg |
 | `frontend/` | vanilla JS terminal: scanner table, sparklines, board grid, chart modal, i18n RU/EN |
 
 ## Deliberate deviations from the reference stack

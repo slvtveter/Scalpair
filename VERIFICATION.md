@@ -503,3 +503,15 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Commit `1a6cd58` is pushed to `main`; Render backend health after the push
   remains HTTP 200 with an active Bybit feed and 124,891 ingested messages at
   verification time. Frontend rollout still needs its static deploy check.
+
+## PostgreSQL runtime compatibility
+
+- `DATABASE_URL` now accepts both `postgres://` and `postgresql://` platform
+  URLs and normalizes them to `postgresql+asyncpg://` for SQLAlchemy's async
+  engine. SQLite remains the local default with its existing WAL migration
+  path.
+- Added the `asyncpg` runtime dependency and a regression test for both
+  PostgreSQL URL forms. Full suite: 139 backend tests and 40 frontend tests.
+- This makes the service compatible with an externally provisioned PostgreSQL
+  database; the current Render service still uses its configured SQLite
+  default until a database resource is attached.

@@ -24,6 +24,7 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
+from app.db import async_database_url  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -129,6 +130,11 @@ class TestScreeners:
 
 
 class TestAuth:
+    def test_postgres_urls_use_async_driver(self):
+        assert async_database_url("postgres://user:pass@db/app").startswith("postgresql+asyncpg://")
+        assert async_database_url("postgresql://user:pass@db/app").startswith("postgresql+asyncpg://")
+        assert async_database_url("sqlite+aiosqlite:///./local.db").startswith("sqlite+")
+
     def test_register_login_me_flow(self, client):
         email = f"trader{time.time_ns()}@scalpair.dev"
         r = client.post("/api/v1/auth/register", json={"email": email, "password": "s3cretpass!"})
