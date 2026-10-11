@@ -450,3 +450,5 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Render backend health returned HTTP 200 with `status=ok`, Bybit WebSocket `connects=1`, zero errors and continuously increasing message count.
 - `GET /api/v1/screeners/overview` returned HTTP 200 after repeated requests without restarting the worker. The payload is pre-encoded on the metrics tick to keep serialization off the request path.
 - Frontend `/en` returned HTTP 200.
+- The multi-source health counters now aggregate all source symbol lists (`8184d19`); the regression suite covers this contract.
+- API smoke checks returned HTTP 200 for overview, source-labelled instrument discovery, candles, and density coverage endpoints with the live Bybit feed.
