@@ -226,6 +226,7 @@ class MarketStreamer:
         self.source_symbols = {primary_name: list(self.top_symbols)}
         self.extra_feeds = []
         for name, feed, source_state, tickers in live[1:]:
+            source_state.feed_mode = name
             symbols = []
             for ticker in tickers:
                 symbol = ticker.get("symbol")
