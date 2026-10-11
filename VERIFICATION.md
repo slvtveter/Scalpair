@@ -626,6 +626,15 @@ syntax/static-server checks did not establish functional or visual acceptance.
   the API regression test verifies the value is retained instead of silently
   dropped.
 
+## Latest browser lifecycle regression
+
+- After the workspace persistence and source-health changes, the isolated
+  Chrome acceptance check again loaded 200 instruments, rendered 16 canvases,
+  and completed 100 Focus open/close cycles.
+- p95 cycle time was 17.3 ms; DOM nodes grew from 10,681 to 10,713, event
+  listeners stayed at 119, heap usage grew from 1.95 MB to 2.07 MB after
+  garbage collection, and runtime exceptions remained at zero.
+
 ## Persisted active workspace group
 
 - `activeGroup` is now included in the authenticated preferences allowlist and
