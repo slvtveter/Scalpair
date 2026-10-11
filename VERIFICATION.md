@@ -452,3 +452,4 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Frontend `/en` returned HTTP 200.
 - The multi-source health counters now aggregate all source symbol lists (`8184d19`); the regression suite covers this contract.
 - API smoke checks returned HTTP 200 for overview, source-labelled instrument discovery, candles, and density coverage endpoints with the live Bybit feed.
+- Commit `924650f` keeps one price sample per second under high trade throughput and normalizes speed by the selected window; targeted and full backend tests pass.
