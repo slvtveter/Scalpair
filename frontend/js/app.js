@@ -71,6 +71,7 @@ const LS = {
 const S = {
   symbols: [],
   bySym: new Map(),
+  byInstrument: new Map(),
   picks: [],
   stats: {},
   feed: "—",
@@ -269,10 +270,12 @@ function onSnapshot(snap) {
   S.picks = snap.picks || [];
   S.stats = snap.stats || {};
   S.bySym.clear();
+  S.byInstrument.clear();
   setFeedStatus("live");
   for (const r of S.symbols) {
+    const identity = r.instrument_id || r.symbol;
     if (r.price > 0) {
-      let hist = S.priceHistory.get(r.symbol);
+      let hist = S.priceHistory.get(identity);
       if (!hist) { hist = []; S.priceHistory.set(r.symbol, hist); }
       const last = hist[hist.length - 1];
       if (!last || Date.now() - last.t > 1000) {
@@ -281,6 +284,7 @@ function onSnapshot(snap) {
       }
     }
     S.bySym.set(r.symbol, r);
+    S.byInstrument.set(identity, r);
   }
   checkAlerts();
 }
@@ -481,16 +485,18 @@ function compareRows(a, b) {
   return delta || a.symbol.localeCompare(b.symbol);
 }
 
+function rowIdentity(row) { return row?.instrument_id || row?.symbol || ""; }
+function rowForIdentity(identity) { return S.byInstrument.get(identity) || S.bySym.get(identity); }
 function sortedRows() {
-  const available = new Map(S.symbols.map((r) => [r.symbol, r]));
+  const available = new Map(S.symbols.map((r) => [rowIdentity(r), r]));
   if (S.autoSort && !S.focusOpen && Date.now() >= S.hoverUntil) {
-    S.order = [...S.symbols].sort(compareRows).map((r) => r.symbol);
+    S.order = [...S.symbols].sort(compareRows).map(rowIdentity);
   } else {
     const known = new Set(S.order);
-    const added = S.symbols.filter((r) => !known.has(r.symbol)).sort(compareRows);
-    S.order = [...S.order, ...added.map((r) => r.symbol)];
+    const added = S.symbols.filter((r) => !known.has(rowIdentity(r))).sort(compareRows);
+    S.order = [...S.order.filter((key) => available.has(key)), ...added.map(rowIdentity)];
   }
-  return S.order.map((sym) => available.get(sym)).filter((r) => r && !S.hidden.has(r.symbol) && inActiveGroup(r.symbol) &&
+  return S.order.map((key) => available.get(key)).filter((r) => r && !S.hidden.has(r.symbol) && inActiveGroup(r.symbol) &&
     (!S.search || r.symbol.includes(S.search.toUpperCase())) &&
     (S.venue === "ALL" || (r.venue || r.exchange || "—") === S.venue) &&
     (r.score ?? 0) >= S.minScore && matchesMarketFilters(r, S.filters));
@@ -745,7 +751,7 @@ function renderBoard() {
     : S.symbols.length ? t("noMatch") : t("waiting");
   grid.style.gridTemplateColumns = `repeat(${S.gridSize}, 1fr)`;
   grid.style.gridTemplateRows = `repeat(${S.gridSize}, 1fr)`;
-  const sig = `${slice.map((r) => r.symbol).join(",")}|${S.boardTf}`;
+  const sig = `${slice.map(rowIdentity).join(",")}|${S.boardTf}`;
   if (sig !== _boardSig || _boardTf !== S.boardTf) {
     _boardSig = sig;
     _boardTf = S.boardTf;
@@ -763,7 +769,7 @@ function renderBoard() {
   }
   for (const tile of grid.querySelectorAll(".board-tile")) {
     const sym = tile.dataset.sym;
-    const r = S.bySym.get(sym);
+    const r = rowForIdentity(tile.dataset.instrument || sym);
     tile.draggable = !S.autoSort;
     tile.style.borderLeftColor = groupColor(sym);
     if (r) updateTileMetrics(tile, r);
@@ -780,7 +786,7 @@ function renderBoard() {
     }
     getCandles(sym, S.boardTf, r?.instrument_id).then((candles) => {
       if (!tile.isConnected) return;
-      const latest = S.bySym.get(sym);
+      const latest = rowForIdentity(tile.dataset.instrument || sym);
       paintTile(tile.querySelector("canvas"), candles, isStale(latest || {}) ? null : latest?.price, sym, boardOverlays(latest));
     });
   }
@@ -821,7 +827,7 @@ let draggedSymbol = null;
 $("board-grid").addEventListener("dragstart", (e) => {
   const tile = e.target.closest(".board-tile");
   if (!tile || S.autoSort) { e.preventDefault(); return; }
-  draggedSymbol = tile.dataset.sym;
+  draggedSymbol = tile.dataset.instrument || tile.dataset.sym;
   e.dataTransfer.setData("text/plain", draggedSymbol);
   e.dataTransfer.effectAllowed = "move";
 });
@@ -832,7 +838,7 @@ $("board-grid").addEventListener("drop", (e) => {
   const target = e.target.closest(".board-tile");
   if (!target || !draggedSymbol) return;
   e.preventDefault();
-  if (moveBoardSymbol(draggedSymbol, target.dataset.sym)) { renderBoard(); renderCoinList(); }
+  if (moveBoardSymbol(draggedSymbol, target.dataset.instrument || target.dataset.sym)) { renderBoard(); renderCoinList(); }
   draggedSymbol = null;
 });
 $("board-grid").addEventListener("dragend", () => { draggedSymbol = null; });

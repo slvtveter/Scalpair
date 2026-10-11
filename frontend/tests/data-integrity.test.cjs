@@ -108,6 +108,13 @@ test('equal and missing metrics have a stable alphabetical tie breaker', () => {
   a.run('S.symbols[0].score=null; S.symbols[1].score=null; S.symbols.reverse()');
   assert.equal(order(a), 'CCCUSDT,AAAUSDT,BBBUSDT');
 });
+test('identical tickers from different markets keep separate board identities', () => {
+  const a = app();
+  a.run('S.symbols=[{symbol:"BTCUSDT",instrument_id:"BY-F:FUTURES:BTCUSDT",venue:"BY-F",score:80},{symbol:"BTCUSDT",instrument_id:"BI-S:SPOT:BTCUSDT",venue:"BI-S",score:70}]; onSnapshot({type:"snapshot",feed:"multi",symbols:S.symbols});');
+  assert.equal(a.run('sortedRows().length'), 2);
+  assert.equal(a.run('rowForIdentity("BY-F:FUTURES:BTCUSDT").venue'), 'BY-F');
+  assert.equal(a.run('rowForIdentity("BI-S:SPOT:BTCUSDT").venue'), 'BI-S');
+});
 test('existing card headers refresh without rebuilding their canvas', () => {
   const a = app();
   a.context.tile = {querySelector: a.el};
