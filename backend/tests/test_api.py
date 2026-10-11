@@ -15,6 +15,8 @@ os.environ["TOP_SYMBOLS"] = "4"
 os.environ["REDIS_URL"] = "redis://localhost:59999/0"  # unreachable -> in-memory fallback
 os.environ["DATABASE_URL"] = f"sqlite+aiosqlite:///{_tmpdir}/test.db"
 os.environ["JWT_SECRET"] = "test-secret"
+os.environ["TELEGRAM_BOT_TOKEN"] = "test-bot-token"
+os.environ["TELEGRAM_BOT_USERNAME"] = "ScalpairTestBot"
 os.environ["ML_SCORE_INTERVAL"] = "1.0"
 os.environ["WS_BROADCAST_RATE"] = "10"
 
@@ -153,6 +155,17 @@ class TestAuth:
         assert saved["paneOverlays"]["0"]["walls"] is False
         assert "ignoredServerField" not in saved
         assert client.get("/api/v1/preferences", headers=headers).json()["preferences"] == saved
+
+        link_response = client.post("/api/v1/telegram/link", headers=headers)
+        assert link_response.status_code == 200
+        link_body = link_response.json()
+        assert link_body["configured"] is True and link_body["chat_linked"] is False
+        token = link_body["link_url"].split("start=", 1)[1]
+        webhook = {"message": {"chat": {"id": 424242, "type": "private"}, "text": f"/start {token}"}}
+        linked = client.post("/api/v1/telegram/webhook", json=webhook)
+        assert linked.status_code == 200 and linked.json()["linked"] is True
+        replay = client.post("/api/v1/telegram/webhook", json=webhook)
+        assert replay.status_code == 200 and replay.json()["linked"] is False
 
     def test_duplicate_register_conflict(self, client):
         email = f"dup{time.time_ns()}@scalpair.dev"

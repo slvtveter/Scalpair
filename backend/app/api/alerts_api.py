@@ -7,7 +7,7 @@ import secrets
 import time
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -264,3 +264,49 @@ async def telegram_unlink(user: AUTHORIZED) -> None:
         if link:
             await sess.delete(link)
             await sess.commit()
+
+
+@router.post("/telegram/webhook")
+async def telegram_webhook(request: Request) -> dict[str, Any]:
+    """Consume Telegram /start deep-links and bind the verified chat id.
+
+    Telegram can authenticate webhook deliveries with a secret header. When
+    configured, reject every request without the exact secret; the short-lived
+    random deep-link token remains a second, user-specific proof.
+    """
+    expected_secret = os.environ.get("TELEGRAM_WEBHOOK_SECRET", "")
+    if expected_secret and request.headers.get("X-Telegram-Bot-Api-Secret-Token") != expected_secret:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "invalid Telegram webhook secret")
+    try:
+        update = await request.json()
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "invalid Telegram update") from exc
+    message = update.get("message") if isinstance(update, dict) else None
+    chat = message.get("chat") if isinstance(message, dict) else None
+    text = message.get("text") if isinstance(message, dict) else None
+    if not isinstance(chat, dict) or chat.get("type") != "private" or not isinstance(text, str):
+        return {"ok": True, "linked": False}
+    parts = text.strip().split(maxsplit=1)
+    if not parts or parts[0].split("@", 1)[0].lower() != "/start" or len(parts) != 2:
+        return {"ok": True, "linked": False}
+    token = parts[1].strip()
+    if not token or len(token) > 64:
+        return {"ok": True, "linked": False}
+    factory = get_session_factory(get_settings().database_url)
+    async with factory() as sess:
+        link = (
+            await sess.execute(
+                select(TelegramLink).where(
+                    TelegramLink.link_token == token,
+                    TelegramLink.token_expires > time.time(),
+                )
+            )
+        ).scalar_one_or_none()
+        if link is None:
+            return {"ok": True, "linked": False}
+        link.chat_id = str(chat.get("id", ""))
+        link.linked_at = time.time()
+        link.link_token = None
+        link.token_expires = None
+        await sess.commit()
+    return {"ok": True, "linked": True}

@@ -423,3 +423,10 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Added Binance Spot and Bybit Spot normalized adapters with USDT universe, ticker, kline, trade and order-book streams.
 - API history routing validates that `BI-S`/`BY-S` identities use `SPOT` and keeps alternate-source overlays unavailable.
 - The default deployment remains one active source; simultaneous four-source state still requires the planned instrument-keyed multi-feed store.
+
+## Telegram deep-link handshake
+
+- Added `POST /telegram/webhook` to consume private-chat `/start <token>` updates.
+- Tokens are short-lived, single-use, cleared after binding, and never expose the user id in the URL.
+- Optional `TELEGRAM_WEBHOOK_SECRET` validates Telegram's secret header before parsing updates.
+- API coverage verifies successful binding and replay rejection.

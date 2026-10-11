@@ -31,6 +31,8 @@ services:
         sync: false # optional — set in dashboard, alerts stay in-app without it
       - key: TELEGRAM_BOT_USERNAME
         sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
       - key: CORS_ORIGINS
         value: https://scalpair-frontend.onrender.com
 

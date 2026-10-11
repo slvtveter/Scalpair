@@ -26,6 +26,8 @@ Base: `http://localhost:8080/api/v1` (nginx) or `:8000` (direct). OpenAPI: `/doc
 | `GET /auth/me` | Bearer required |
 | `GET /preferences` | authenticated workspace settings and layout |
 | `PUT /preferences` | authenticated workspace settings (board groups/order/filters, sound/DND, plus Focus `focusLayout`, `focusVenue`, `syncCrosshair`, `syncRange`, and per-pane `paneOverlays`) |
+| `POST /telegram/link` / `DELETE /telegram/link` | authenticated one-time Telegram deep-link creation and unlink |
+| `POST /telegram/webhook` | Telegram `/start <token>` callback; optional `TELEGRAM_WEBHOOK_SECRET` header validation |
 | `GET /watchlists` | authenticated favorite symbols |
 | `PUT /watchlists` | replace authenticated favorite symbols |
 | `GET/PUT /drawings/{SYMBOL}?instrument_id=` | authenticated Focus drawings; optional instrument binding isolates the same ticker across exchanges |
