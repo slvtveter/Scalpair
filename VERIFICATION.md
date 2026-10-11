@@ -538,3 +538,19 @@ syntax/static-server checks did not establish functional or visual acceptance.
   delivery path with a deterministic sender and verifies both rows become
   `sent`.
 - Alert test module: 9 passed; API test module: 20 passed.
+
+## Multi-source runtime smoke test and diagnostics
+
+- A local ASGI run with `DATA_FEED=multi TOP_SYMBOLS=5` started all five
+  adapters; connection logs confirm five WebSocket handshakes. The symbols API
+  returned 25 instruments with BI-F, BI-S, BY-F, BY-S and OK-F identities.
+- The old health response reported only primary-source ingestion and errors;
+  that evidence does not establish freshness or zero errors for all sources.
+- Health now exposes per-source connection/error counters and ingest age,
+  aggregates ingestion counts and reports degraded when a secondary source
+  has no connection after warmup, no ingestion or stale messages.
+- Regression test covers healthy primary plus disconnected secondary, then
+  secondary recovery; all 140 backend tests pass.
+- Production remains on its current feed configuration. Multi-source Render
+  load and per-source live freshness still require validation before changing
+  the deployment default.

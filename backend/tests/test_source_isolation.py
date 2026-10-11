@@ -195,3 +195,35 @@ async def test_cascade_loop_uses_closed_candles_and_three_touches(monkeypatch):
     row = s.build_snapshot()['symbols'][0]
     assert row['levels'][0]['timeframe'] == '1m'
     assert row['levels'][0]['touches'] == 3
+
+
+async def test_multi_health_reports_failed_secondary_source(monkeypatch):
+    import time
+    from types import SimpleNamespace
+    from app.api import routes
+    from app.feeds.base import FeedStats
+
+    s = streamer()
+    s.feed = SimpleNamespace(name='bybit', stats=FeedStats())
+    s.feed.stats.connects = 1
+    s.state.feed_mode = 'bybit'
+    s.state.record_ingest()
+    secondary = MarketState()
+    secondary.feed_mode = 'binance_spot'
+    s.extra_feeds = [SimpleNamespace(name='binance_spot', stats=FeedStats())]
+    s.source_states = {'bybit': s.state, 'binance_spot': secondary}
+    s.source_symbols = {'bybit': ['BTCUSDT'], 'binance_spot': ['BTCUSDT']}
+    s.multi_mode = True
+    monkeypatch.setattr(routes, 'START_TIME', time.time() - 60)
+    request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(
+        streamer=s, market_state=s.state,
+        broadcaster=SimpleNamespace(client_count=0, redis_connected=False))))
+    report = await routes.health(request)
+    assert report.status == 'degraded'
+    assert report.sources['bybit']['status'] == 'ok'
+    assert report.sources['binance_spot']['status'] == 'degraded'
+    secondary.record_ingest()
+    s.extra_feeds[0].stats.connects = 1
+    report = await routes.health(request)
+    assert report.status == 'ok'
+    assert report.messages_ingested == 2

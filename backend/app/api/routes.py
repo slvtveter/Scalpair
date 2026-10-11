@@ -96,13 +96,29 @@ async def health(request: Request) -> HealthReport:
     no_websocket_after_warmup = bool(
         streamer and streamer.feed and streamer.feed.stats.connects == 0 and uptime > 10
     )
+    sources = {}
+    all_feeds = ([streamer.feed] if streamer and streamer.feed else []) + (streamer.extra_feeds if streamer else [])
+    for feed in all_feeds:
+        source_state = streamer.source_states.get(feed.name, state)
+        age = source_state.message_age_ms()
+        stats = feed.stats
+        degraded = (age is not None and age >= 30_000) or (uptime > 30 and source_state.messages_ingested == 0) or (uptime > 10 and stats.connects == 0)
+        sources[feed.name] = {
+            "status": "degraded" if degraded else "ok",
+            "messages_ingested": source_state.messages_ingested,
+            "last_message_age_ms": round(age) if age is not None else None,
+            "connects": stats.connects, "reconnects": stats.reconnects,
+            "messages": stats.messages, "errors": stats.errors, "last_error": stats.last_error,
+        }
+    any_source_degraded = any(row["status"] == "degraded" for row in sources.values())
     return HealthReport(
-        status="ok" if not streamer.feed_degraded and not no_ingest_after_warmup and not no_websocket_after_warmup and (last_age is None or last_age < 30_000) else "degraded",
+        status="ok" if not any_source_degraded and not streamer.feed_degraded and not no_ingest_after_warmup and not no_websocket_after_warmup and (last_age is None or last_age < 30_000) else "degraded",
         uptime_s=round(uptime, 1),
         active_feeds=feeds,
         active_ws_clients=broadcaster.client_count,
         tracked_symbols=_tracked_count(streamer),
-        messages_ingested=state.messages_ingested,
+        messages_ingested=sum(row["messages_ingested"] for row in sources.values()) if sources else state.messages_ingested,
+        sources=sources,
         avg_ingest_latency_ms=round(state.ingest_latency_ema_ms, 2),
         last_message_age_ms=round(last_age) if last_age is not None else None,
         redis_connected=broadcaster.redis_connected,
