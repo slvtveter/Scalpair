@@ -272,6 +272,9 @@ syntax/static-server checks did not establish functional or visual acceptance.
   top-N coverage note, so limited books are not presented as full depth.
 - Analytics regression coverage verifies BRP/category and level counts; the
   existing stale-book behavior still clears walls on disconnect.
+- After Render deployment `019b965`, `/api/v1/screeners/densities?limit=2`
+  returned `BY-F` walls with `category=large`, a concrete `brp_usd`, 25/25
+  received levels and `complete_percent_range=false` over HTTP 200.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
