@@ -330,6 +330,8 @@ async def candles(
             "market": "FUTURES",
             "sourceGeneration": generation,
             "historySource": source,
+            "overlaysSource": "active_live_feed" if not alternate_source else "unavailable_for_selected_source",
+            "overlaysAvailable": not alternate_source,
             "limitedHistory": limited,
             "levelTimeframe": "1m",
             "candles": history,

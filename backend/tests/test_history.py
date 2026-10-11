@@ -90,6 +90,7 @@ async def test_candle_route_can_fetch_an_explicit_alternate_source(monkeypatch):
     req = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(market_state=state, streamer=stream)))
     data = json.loads((await candles(req, "BTCUSDT", 300, "1m", "BI-F:FUTURES:BTCUSDT")).body)
     assert data["venue"] == "BI-F" and data["candles"][0]["o"] == 1 and data["walls"] == []
+    assert data["overlaysAvailable"] is False and data["overlaysSource"] == "unavailable_for_selected_source"
     await stream.history.close()
 
 @pytest.mark.parametrize('module_name,cls,param,expected', [('binance','BinanceFuturesFeed','interval','1d'),('bybit','BybitLinearFeed','interval','D'),('okx','OkxSwapFeed','bar','1Dutc')])

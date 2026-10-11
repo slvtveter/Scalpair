@@ -297,6 +297,15 @@ syntax/static-server checks did not establish functional or visual acceptance.
   the first check observed the documented transient free-tier 502 during
   service wake-up.
 
+## Focus overlay provenance
+
+- Focus history responses now include `overlaysAvailable` and
+  `overlaysSource`. A selected alternate exchange explicitly reports that
+  its L2 overlays are unavailable, and the pane status shows this to the
+  trader instead of implying that active-feed walls belong to that history.
+- Added API regression coverage; syntax, 36 frontend tests and whitespace
+  checks pass. Production deployment is pending.
+
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
 

@@ -1500,7 +1500,10 @@ async function refreshChart(resetView = false, chart = focusPanes[0]) {
     if (requestId !== chart.requestId || symbol !== chartSym || epoch !== S.dataEpoch || tf !== chart.tfMin || chart.index >= S.focusLayout) return;
     chart.sourceTf = tf;
     $("chart-title").textContent = `${symbol} · ${body.venue || "—"} · ${body.market || "FUTURES"} · ${timeframeName(tf)}`;
-    setHistoryStatus(`${body.venue || "—"} · ${body.timeframe || timeframeName(tf)} · ${(body.candles || []).length} bars${body.limitedHistory ? " · " + (S.lang === "ru" ? "ограниченная история потока" : "limited stream history") : ""} · ${S.lang === "ru" ? "Уровни: 1м" : "Levels: 1m"}`, chart);
+    const overlayStatus = body.overlaysAvailable === false
+      ? (S.lang === "ru" ? " · L2 этого источника недоступен" : " · this source has no L2 overlays")
+      : (S.lang === "ru" ? " · L2: live" : " · L2: live");
+    setHistoryStatus(`${body.venue || "—"} · ${body.timeframe || timeframeName(tf)} · ${(body.candles || []).length} bars${body.limitedHistory ? " · " + (S.lang === "ru" ? "ограниченная история потока" : "limited stream history") : ""}${overlayStatus}`, chart);
     chart.candles = body.candles || [];
     rebuildSeries(chart);
     chart.walls = body.walls || [];
