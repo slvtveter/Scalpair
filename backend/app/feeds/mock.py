@@ -36,6 +36,14 @@ MOCK_UNIVERSE: list[dict[str, Any]] = [
 ]
 
 
+def _mock_meta(n: int) -> list[dict[str, Any]]:
+    """Extend the small named fixture with deterministic symbols for load tests."""
+    rows = list(MOCK_UNIVERSE)
+    for idx in range(len(rows), max(len(rows), n)):
+        rows.append({"symbol": f"TEST{idx + 1:03d}USDT", "base": 10.0 + idx, "tick": 0.001})
+    return rows
+
+
 class MockFeed(FeedConnector):
     name = "mock"
 
@@ -45,9 +53,12 @@ class MockFeed(FeedConnector):
         self._ticks: dict[str, float] = {}
         self._burst: dict[str, float] = {m["symbol"]: 0.0 for m in MOCK_UNIVERSE}
         self._candle_start: dict[str, tuple[int, float, float, float, float, float]] = {}
+        self._universe_meta: dict[str, dict[str, Any]] = {}
 
     # ------------------------------------------------------------------
     async def fetch_universe(self, n: int) -> list[dict[str, Any]]:
+        universe = _mock_meta(n)
+        self._universe_meta = {row["symbol"]: row for row in universe}
         return [
             {
                 "symbol": m["symbol"],
@@ -55,7 +66,7 @@ class MockFeed(FeedConnector):
                 "quote_volume_24h": random.uniform(5e7, 4e9),
                 "price_change_pct_24h": random.uniform(-9, 9),
             }
-            for m in MOCK_UNIVERSE[: max(1, min(n, len(MOCK_UNIVERSE)))]
+            for m in universe[: max(1, min(n, len(universe)))]
         ]
 
     async def subscribe_messages(self, symbols: list[str]) -> list[dict[str, Any]]:
@@ -67,7 +78,7 @@ class MockFeed(FeedConnector):
         """Override: no real socket — synthesize events on a fixed cadence."""
         log.info("[mock] synthetic market starting with %d symbols", len(self.top_symbols))
         for sym in self.top_symbols:
-            meta = next((m for m in MOCK_UNIVERSE if m["symbol"] == sym), MOCK_UNIVERSE[0])
+            meta = self._universe_meta.get(sym, MOCK_UNIVERSE[0])
             self._prices[sym] = meta["base"]
             self._ticks[sym] = meta["tick"]
         book_task = asyncio.create_task(self._book_loop())
@@ -140,8 +151,8 @@ class MockFeed(FeedConnector):
             await self.callbacks.on_candle(sym, bucket, o, h, l, c, v)
 
     async def _ticker_loop(self) -> None:
-        changes = {m["symbol"]: random.uniform(-6, 6) for m in MOCK_UNIVERSE}
-        vols = {m["symbol"]: random.uniform(1e8, 2e9) for m in MOCK_UNIVERSE}
+        changes = {sym: random.uniform(-6, 6) for sym in self.top_symbols}
+        vols = {sym: random.uniform(1e8, 2e9) for sym in self.top_symbols}
         while not self._stop.is_set():
             ts = time.time() * 1000
             for sym in self.top_symbols:
