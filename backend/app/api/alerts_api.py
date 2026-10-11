@@ -111,6 +111,13 @@ class RuleOut(RuleIn):
     last_triggered_at: float | None = None
 
 
+class RulePatch(BaseModel):
+    enabled: bool | None = None
+    threshold: float | None = Field(default=None, gt=0)
+    cooldown_s: int | None = Field(default=None, ge=30, le=86400)
+    recurring: bool | None = None
+
+
 def _rule_out(r: AlertRule) -> RuleOut:
     return RuleOut(
         id=r.id, symbol=r.symbol, instrument_id=r.instrument_id, rule_type=r.rule_type, threshold=r.threshold,
@@ -156,6 +163,21 @@ async def delete_rule(rule_id: int, user: AUTHORIZED) -> None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "rule not found")
         await sess.delete(rule)
         await sess.commit()
+
+
+@router.patch("/alerts/{rule_id}", response_model=RuleOut)
+async def update_rule(rule_id: int, body: RulePatch, user: AUTHORIZED) -> RuleOut:
+    _require_user(user)
+    factory = get_session_factory(get_settings().database_url)
+    async with factory() as sess:
+        rule = await sess.get(AlertRule, rule_id)
+        if not rule or rule.user_id != user.id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "rule not found")
+        for key, value in body.model_dump(exclude_unset=True).items():
+            setattr(rule, key, value)
+        await sess.commit()
+        await sess.refresh(rule)
+        return _rule_out(rule)
 
 
 @router.get("/notifications")

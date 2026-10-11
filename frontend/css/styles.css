@@ -472,6 +472,10 @@ body { display: flex; flex-direction: column; }
 .notif-empty { padding: 18px; text-align: center; color: var(--text-3); }
 .notif-actions { padding: 8px 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .notif-actions .delivery { flex: 1 1 100%; }
+.alert-rules { border-bottom: 1px solid var(--border); }
+.alert-rule { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 11px; }
+.alert-rule .delivery { margin-left: 6px; }
+.alert-rule.muted { opacity: .55; }
 .notif-actions a { color: var(--accent); text-decoration: none; font-size: 11px; }
 
 .toasts { position: fixed; bottom: 44px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 70; }

@@ -108,6 +108,7 @@ const S = {
   notifLastId: LS.get("notifLastId", 0),
   _toastedId: LS.get("notifLastId", 0),
   _notifItems: [],
+  alertRules: [],
   msgTimes: [],
   lastAlertAt: new Map(),
   sideTab: "coins",
@@ -942,12 +943,14 @@ function renderAlertsInline() {
     return;
   }
   const items = S._notifItems || [];
-  el.innerHTML = items.length
+  const rules = S.alertRules || [];
+  const rulesHtml = rules.length ? `<div class="alert-rules">${rules.map(rule => `<div class="alert-rule ${rule.enabled ? "" : "muted"}"><b>${esc(rule.symbol)}</b><span class="delivery">${esc(rule.rule_type)} · ${rule.threshold}</span><button class="ctl ctl-btn rule-toggle" data-rule-toggle="${rule.id}">${rule.enabled ? "Pause" : "Enable"}</button><button class="ctl ctl-btn rule-delete" data-rule-delete="${rule.id}">Delete</button></div>`).join("")}</div>` : `<div class="notif-empty">${S.lang === "ru" ? "Правил нет" : "No alert rules"}</div>`;
+  el.innerHTML = rulesHtml + (items.length
     ? items.map((n) => `
       <div class="notif-item"><b>${esc(n.symbol)}</b> ${esc(n.message)}
         <div class="delivery">${new Date(n.ts * 1000).toLocaleTimeString()} · ${esc(n.delivery.join(", "))}</div>
       </div>`).join("")
-    : `<div class="notif-empty">${t("notifEmpty")}</div>`;
+    : `<div class="notif-empty">${t("notifEmpty")}</div>`);
   el.innerHTML += `<div class="notif-actions"><button id="nl-telegram" class="ctl ctl-btn">Telegram</button><button id="nl-telegram-unlink" class="ctl ctl-btn" disabled>Unlink</button><button id="nl-logout" class="ctl ctl-btn">${t("logout")}</button><span id="nl-telegram-status" class="delivery"></span></div>`;
   const lo = $("nl-logout");
   if (lo) lo.onclick = () => {
@@ -959,6 +962,16 @@ function renderAlertsInline() {
     renderAlertsInline();
     if (ws) ws.close();
   };
+  el.querySelectorAll("[data-rule-toggle]").forEach(button => button.onclick = async () => {
+    const rule = S.alertRules.find(item => String(item.id) === button.dataset.ruleToggle);
+    if (!rule) return;
+    const response = await api(`/api/v1/alerts/${rule.id}`, {method: "PATCH", body: JSON.stringify({enabled: !rule.enabled})});
+    if (response.ok) await loadAlertRules(); else toast("Alert update failed", "err");
+  });
+  el.querySelectorAll("[data-rule-delete]").forEach(button => button.onclick = async () => {
+    const response = await api(`/api/v1/alerts/${button.dataset.ruleDelete}`, {method: "DELETE"});
+    if (response.ok || response.status === 204) { await loadAlertRules(); toast("Alert deleted"); } else toast("Alert delete failed", "err");
+  });
   const telegram = $("nl-telegram");
   const telegramUnlink = $("nl-telegram-unlink");
   const setTelegramState = (linked, text) => {
@@ -1001,6 +1014,16 @@ function renderAlertsInline() {
       toast(error.message || "Telegram unlink failed", "err");
     }
   };
+}
+
+async function loadAlertRules() {
+  if (!S.jwt) return;
+  try {
+    const response = await api("/api/v1/alerts");
+    if (!response.ok) return;
+    S.alertRules = await response.json();
+    if (S.sideTab === "alerts") renderAlertsInline();
+  } catch {}
 }
 
 // ------------------------- notifications -------------------------
@@ -1047,6 +1070,7 @@ async function authFlow(path) {
       await syncPreferences();
       if (ws) ws.close(); // reconnect carries the token → full feed
       pollNotifications();
+      loadAlertRules();
     } else {
       toast("✓ " + t("signUp"));
       await authFlow("/api/v1/auth/login");
@@ -1158,6 +1182,7 @@ $("alert-create").addEventListener("click", async () => {
   if (!body.threshold || body.threshold <= 0) { toast(t("thresholdNeeded"), "err"); return; }
   const res = await api("/api/v1/alerts", { method: "POST", body: JSON.stringify(body) });
   toast(res.ok ? `✓ ${t("alertCreated")}` : `${res.status}`, res.ok ? "" : "err");
+  if (res.ok) loadAlertRules();
 });
 
 // ------------------------- toolbar / burger -------------------------
