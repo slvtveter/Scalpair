@@ -944,7 +944,7 @@ function renderAlertsInline() {
   }
   const items = S._notifItems || [];
   const rules = S.alertRules || [];
-  const rulesHtml = rules.length ? `<div class="alert-rules">${rules.map(rule => `<div class="alert-rule ${rule.enabled ? "" : "muted"}"><b>${esc(rule.symbol)}</b><span class="delivery">${esc(rule.rule_type)} · ${rule.threshold}</span><button class="ctl ctl-btn rule-toggle" data-rule-toggle="${rule.id}">${rule.enabled ? "Pause" : "Enable"}</button><button class="ctl ctl-btn rule-delete" data-rule-delete="${rule.id}">Delete</button></div>`).join("")}</div>` : `<div class="notif-empty">${S.lang === "ru" ? "Правил нет" : "No alert rules"}</div>`;
+  const rulesHtml = rules.length ? `<div class="alert-rules">${rules.map(rule => `<div class="alert-rule ${rule.enabled ? "" : "muted"}"><div><b>${esc(rule.symbol)}</b><span class="delivery">${esc(rule.rule_type)}</span></div><label class="rule-edit-field"><span>threshold</span><input type="number" step="any" min="0.00000001" value="${Number(rule.threshold)}" data-rule-threshold="${rule.id}" /></label><label class="rule-edit-field"><span>cooldown</span><input type="number" step="1" min="30" value="${Number(rule.cooldown_s)}" data-rule-cooldown="${rule.id}" /></label><button class="ctl ctl-btn rule-save" data-rule-save="${rule.id}">Save</button><button class="ctl ctl-btn rule-toggle" data-rule-toggle="${rule.id}">${rule.enabled ? "Pause" : "Enable"}</button><button class="ctl ctl-btn rule-delete" data-rule-delete="${rule.id}">Delete</button></div>`).join("")}</div>` : `<div class="notif-empty">${S.lang === "ru" ? "Правил нет" : "No alert rules"}</div>`;
   el.innerHTML = rulesHtml + (items.length
     ? items.map((n) => `
       <div class="notif-item"><b>${esc(n.symbol)}</b> ${esc(n.message)}
@@ -967,6 +967,16 @@ function renderAlertsInline() {
     if (!rule) return;
     const response = await api(`/api/v1/alerts/${rule.id}`, {method: "PATCH", body: JSON.stringify({enabled: !rule.enabled})});
     if (response.ok) await loadAlertRules(); else toast("Alert update failed", "err");
+  });
+  el.querySelectorAll("[data-rule-save]").forEach(button => button.onclick = async () => {
+    const id = button.dataset.ruleSave;
+    const threshold = Number(el.querySelector(`[data-rule-threshold="${id}"]`)?.value);
+    const cooldown_s = Number(el.querySelector(`[data-rule-cooldown="${id}"]`)?.value);
+    if (!Number.isFinite(threshold) || threshold <= 0 || !Number.isInteger(cooldown_s) || cooldown_s < 30) {
+      toast("Enter a valid threshold and cooldown", "err"); return;
+    }
+    const response = await api(`/api/v1/alerts/${id}`, {method: "PATCH", body: JSON.stringify({threshold, cooldown_s})});
+    if (response.ok) { await loadAlertRules(); toast("Alert updated"); } else toast("Alert update failed", "err");
   });
   el.querySelectorAll("[data-rule-delete]").forEach(button => button.onclick = async () => {
     const response = await api(`/api/v1/alerts/${button.dataset.ruleDelete}`, {method: "DELETE"});

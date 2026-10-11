@@ -473,9 +473,11 @@ body { display: flex; flex-direction: column; }
 .notif-actions { padding: 8px 14px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .notif-actions .delivery { flex: 1 1 100%; }
 .alert-rules { border-bottom: 1px solid var(--border); }
-.alert-rule { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 11px; }
+.alert-rule { display: grid; grid-template-columns: minmax(70px,1fr) auto auto auto auto auto; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 11px; }
 .alert-rule .delivery { margin-left: 6px; }
 .alert-rule.muted { opacity: .55; }
+.rule-edit-field { display: grid; gap: 2px; color: var(--text-3); font: 9px var(--font-mono); }
+.rule-edit-field input { width: 70px; height: 24px; padding: 0 5px; }
 .notif-actions a { color: var(--accent); text-decoration: none; font-size: 11px; }
 
 .toasts { position: fixed; bottom: 44px; right: 16px; display: flex; flex-direction: column; gap: 8px; z-index: 70; }
