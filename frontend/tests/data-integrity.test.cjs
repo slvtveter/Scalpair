@@ -41,6 +41,12 @@ test('failed candle request preserves only previously received history', async (
   const rows = await a.run('getCandles("BTCUSDT")');
   assert.equal(rows.length, 1); assert.equal(rows[0].t, 1);
 });
+test('failed native timeframe request never falls back to 1m cache', async () => {
+  const a = app();
+  a.run('S.candleCache.set("BTCUSDT", {ts: Date.now(), candles: [{t: 1, o: 2, h: 3, l: 1, c: 2, v: 4}]})');
+  const rows = await a.run('getCandles("BTCUSDT", 240, "BY-F:FUTURES:BTCUSDT")');
+  assert.equal(rows.length, 0);
+});
 test('server demo feed is labelled synthetic and source switches discard cached history', () => {
   const a = app();
   a.run('onSnapshot({type:"snapshot",feed:"mock", symbols:[]})');

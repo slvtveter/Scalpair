@@ -531,7 +531,9 @@ function moveBoardSymbol(source, target) {
 async function getCandles(sym, tfMin = 1, instrumentId = "") {
   const epoch = S.dataEpoch;
   const key = tfMin === 1 && !instrumentId ? sym : `${sym}:${tfMin}:${instrumentId || "active"}`;
-  const cached = S.candleCache.get(key) || (key === sym ? null : S.candleCache.get(sym));
+  // Never fall back from a requested native timeframe/source to a different
+  // series: a 1m response cannot safely represent 4h or 1D candles.
+  const cached = S.candleCache.get(key);
   if (cached && Date.now() - cached.ts < 60000) return cached.candles;
   try {
     const source = instrumentId ? `&instrument_id=${encodeURIComponent(instrumentId)}` : "";
