@@ -354,6 +354,9 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - The focused backend suite (`test_api`, `test_alerts`, `test_analytics`,
   `test_history`) passes 56 tests; frontend suite passes 36 tests. The fix
   prevents source selection from failing only outside the HTTP adapter.
+- After Render deployment `01ec24c`, health returned HTTP 200 and the live
+  Bybit 4h endpoint returned `historySource=exchange_rest` with
+  `overlaysAvailable=true`.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
