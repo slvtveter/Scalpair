@@ -455,3 +455,4 @@ syntax/static-server checks did not establish functional or visual acceptance.
 - Commit `924650f` keeps one price sample per second under high trade throughput and normalizes speed by the selected window; targeted and full backend tests pass.
 - Commit `af05024` prevents secondary-market score alerts from borrowing the primary source's ticker-keyed score; the integration test confirms one source-bound event and exactly one in-app plus one Telegram delivery row.
 - Final audit on 2026-10-11: 137 backend tests and 37 frontend tests pass; Render health, overview and frontend `/en` each returned HTTP 200 with a live Bybit stream.
+- Local ASGI load test with `DATA_FEED=mock`, 20 REST requests/sec for 10 seconds and 16 concurrent WebSocket clients: 196 REST requests, 0 errors, p95 6.3 ms, all 16 clients delivered snapshots. This validates the 16-client target on the test machine only; 200-symbol and browser 16-chart acceptance remain open.
