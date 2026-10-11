@@ -519,3 +519,11 @@ syntax/static-server checks did not establish functional or visual acceptance.
   recovered to HTTP 200 with a fresh Bybit process, 3,639+ ingested messages,
   one connection and zero feed errors. The transient restart is consistent
   with the current free-tier deployment behavior.
+
+## Alert source visibility
+
+- The in-app alert rule list now displays the bound instrument identity for
+  source-specific rules (`VENUE:MARKET:SYMBOL`) and explicitly labels legacy
+  symbol-only rules as applying to all sources. This prevents a BTC Spot rule
+  from being mistaken for a BTC Futures rule while editing the rule list.
+- JavaScript syntax and all 40 frontend tests pass.
