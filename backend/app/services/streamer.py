@@ -519,6 +519,8 @@ class MarketStreamer:
             candidates = [
                 BinanceFuturesFeed(self._make_callbacks()),
                 BybitLinearFeed(self._make_callbacks()),
+                BinanceSpotFeed(self._make_callbacks()),
+                BybitSpotFeed(self._make_callbacks()),
                 OkxSwapFeed(self._make_callbacks()),
             ]
             for candidate in candidates:
