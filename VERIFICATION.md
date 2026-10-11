@@ -304,7 +304,10 @@ syntax/static-server checks did not establish functional or visual acceptance.
   its L2 overlays are unavailable, and the pane status shows this to the
   trader instead of implying that active-feed walls belong to that history.
 - Added API regression coverage; syntax, 36 frontend tests and whitespace
-  checks pass. Production deployment is pending.
+  checks pass. After Render deployment `7defd63`, the live Bybit candle
+  response returned `overlaysAvailable=true` and
+  `overlaysSource=active_live_feed` over HTTP 200. Alternate-source 503s
+  remain explicit when an upstream cannot serve the requested history.
 
 - Focus overlay controls were verified by frontend tests: levels, walls and volume can be toggled independently per pane.
 
